@@ -1,8 +1,16 @@
 """Global pytest fixtures for the ampa test suite."""
 
+# Ensure the package source directory is on sys.path so tests running from
+# the repository root can import the package without an editable/installed
+# installation. This supports the src/ layout used by this project.
 import os
-
+import sys
 import pytest
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+SRC = os.path.join(ROOT, "src")
+if SRC not in sys.path:
+    sys.path.insert(0, SRC)
 
 
 @pytest.fixture(autouse=True)
