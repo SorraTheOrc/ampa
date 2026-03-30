@@ -26,7 +26,7 @@ classifiers = [
 packages = [{include = "ampa", from = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.8, <3.12"
 # Core dependencies will be added during migration
 # aiohttp = "^3.9.0"
 # discord-py = "^2.3.0"
