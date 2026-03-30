@@ -1,0 +1,11 @@
+{
+  "units": "hours",
+  "thresholds": {
+    "XS": { "min": 0, "max": 4, "min_inclusive": true, "max_inclusive": false },
+    "S": { "min": 4, "max": 24, "min_inclusive": true, "max_inclusive": false },
+    "M": { "min": 24, "max": 80, "min_inclusive": true, "max_inclusive": false },
+    "L": { "min": 80, "max": 240, "min_inclusive": true, "max_inclusive": false },
+    "XL": { "min": 240, "max": null, "min_inclusive": true }
+  },
+  "notes": "T-shirt sizes are inclusive of coordination, review, testing, and risk buffer. All bounds are in hours. Bounds are min-inclusive and max-exclusive (e.g., S covers 4.00h up to but not including 24.00h). XL has no upper bound."
+}

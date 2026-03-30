@@ -1,0 +1,51 @@
+- Restatement: Implement a Risk & Effort Estimator skill that ingests an issue and produces a structured PERT effort estimate and risk matrix for engineering planning.
+- WBS: 1) Requirements & prompt spec; 2) CLI trigger + opencode/wl integration; 3) Core estimator logic (WBS, PERT, risk aggregation); 4) Helper scripts (calc_*); 5) Tests (unit, integration, JSON shape); 6) Documentation & examples; 7) CI/QA checks and pre-commit hooks; 8) Release packaging and CLI entrypoint; 9) Monitoring/telemetry and maintenance handoff.
+- PERT (hours): O=120, M=240, P=480 → Expected E = (120 + 4*240 + 480)/6 = 1560/6 = 260.0h.
+- Additive overheads: coordination 24h, review 16h, testing/integration 32h, risk buffer 24h → overhead total 96h.
+- Final range and recommendation: min = O + overhead = 120+96 = 216h; max = P + overhead = 480+96 = 576h; recommended planning value ≈ 360h (rounded conservative from 356h).
+ - T-shirt size: Extra Large (thresholds: XL ≥ 240h).
+- Certainty for risk calculation: 65% (moderate uncertainty around integration and security constraints).
+- Risk (parent & children P/I): Parent SA-0MKSTQR3H1HLD7HC P=4 I=4; Child SA-0MKT9O9AY002COU8 (TOTP synthetic) P=3 I=3; other TEST CHILDs P=1 I=1.
+- Aggregated risk (script): probability=4.14, impact=4.14 → score=17 (High).
+- Top 3 risk drivers: Security & compliance; CLI/wl integration and permissions; Test coverage for edge cases.
+- Mitigations: Harden prompt and add security review; prototype CLI integration early and add automation; require dedicated integration & e2e test pass before rollout.
+
+{
+  "effort": {
+    "unit": "hours",
+    "tshirt": "Extra Large",
+    "o": 120,
+    "m": 240,
+    "p": 480,
+    "expected": 260.0,
+    "recommended": 360,
+    "range": [216, 576]
+  },
+  "risk": {
+    "probability": 4.14,
+    "impact": 4.14,
+    "score": 17,
+    "level": "High",
+    "top_drivers": [
+      "Security & compliance",
+      "CLI/wl integration",
+      "Test coverage & edge cases"
+    ],
+    "mitigations": [
+      "Perform security review and threat modeling early",
+      "Prototype CLI integration and validate permissions",
+      "Add targeted e2e tests and integration checks before release"
+    ]
+  },
+  "confidence_percent": 60,
+  "assumptions": [
+    "Access to the opencode/wl CLI and necessary permissions is available",
+    "Team members with CLI/CI access and a reviewer for security are available",
+    "No external regulatory changes during implementation"
+  ],
+  "unknowns": [
+    "Exact integration surface and authentication model for wl/opencode CLI",
+    "Production performance requirements and telemetry expectations",
+    "Any additional security/compliance requirements beyond standard reviews"
+  ]
+}

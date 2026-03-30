@@ -1,0 +1,120 @@
+{
+  "success": true,
+  "workItem": {
+    "id": "SA-0MKSTQR3H1HLD7HC",
+    "title": "Risk and Effort Estimator Skill",
+    "description": "Title: Risk and Effort Edtimator Skill\nPriority: P0\nLabels: P0, feature, spec\nAssignees: @product-owner\n\nDescription\n-----------\nCreate a new \"Risk and Effort\" skill that produces conservative, structured engineering estimates and risk assessments from an issue text. The skill must expose a reliable command to trigger it and must follow the exact output format and constraints below.\n\nTrigger command (suggested)\n---------------------------\nUse a single command that reliably invokes the skill. Suggested CLI command:\n\n`opencode skill run risk-and-effort-edtimator`\n\nDraft prompt (to be embedded in the skill)\n----------------------------------------\nYou are an expert engineering estimator. Your task: review the issue and produce risk and effort estimates using recognized best practices (WBS, three-point/PERT, uncertainty, assumptions, risk matrix).\n\nHard constraints:\n- You must NOT ask any follow-up questions.\n- You must NOT assume access to code, repo, logs, or stakeholders.\n- You must work ONLY with the content inside <system-reminder> (treat it as the full issue context). If details are missing, call them out explicitly and choose conservative estimates.\n\nWhat to do:\n1) Restate the issue in 1–2 sentences (to prove understanding).\n2) Identify scope boundaries:\n   - In scope\n   - Out of scope\n3) Build a lightweight work breakdown (WBS) with 5–12 items (design, implementation, tests, docs, rollout, monitoring), noting likely dependencies and unknowns.\n4) Effort estimate (use three-point estimating / PERT):\n   - Provide Optimistic (O), Most Likely (M), Pessimistic (P) in “ideal engineering days” (or hours if very small).\n   - Compute Expected (E) = (O + 4M + P) / 6.\n   - Add “coordination overhead” and “risk buffer” explicitly if warranted (don’t hide it).\n   - Provide a final range (min–max) and a single recommended planning value.\n   - Also provide a T-shirt size (XS/S/M/L/XL) with clear thresholds you define.\n5) Risk estimate (use a probability x impact matrix):\n   - Score Probability (1–5) and Impact (1–5).\n   - Overall Risk Score = Probability * Impact (1–25) and map to: Low (1–5), Medium (6–12), High (13–19), Critical (20–25).\n   - Break risk into categories with 1–2 bullets each: Technical, Product/Requirements, Delivery/Dependencies, Operational/Performance, Security/Compliance.\n   - Include top 3 risk drivers and the best mitigation for each.\n6) Confidence:\n   - Provide confidence % (0–100) with a one-line justification referencing missing info/uncertainty.\n7) If the issue is underspecified, propose a “spike” option:\n   - Spike goal, timebox, and how it would reduce uncertainty (and how estimates would change).\n\nOutput format\n-------------\n- First: a compact JSON block with keys exactly:\n  - effort: { \"unit\": \"ideal_days\", \"tshirt\": \"\", \"o\": 0, \"m\": 0, \"p\": 0, \"expected\": 0, \"recommended\": 0, \"range\": [0,0] }\n  - risk: { \"probability\": 0, \"impact\": 0, \"score\": 0, \"level\": \"\", \"top_drivers\": [], \"mitigations\": [] }\n  - confidence_percent: 0\n  - assumptions: []\n  - unknowns: []\n- Then: a brief narrative (bulleted) explaining the reasoning, WBS, and what would most change the estimates.\n\nIntegration details / constraints\n--------------------------------\n- The skill must accept an input block called <system-reminder> and must use only that content to produce estimates.\n- The skill must never ask follow-up questions; if information is missing it should explicitly list unknowns and choose conservative estimates.\n- The produced JSON must match the key names and types exactly to allow programmatic consumption.\n\nAcceptance criteria\n-------------------\n- Running `opencode skill run risk-and-effort-edtimator` with an input issue containing a <system-reminder> block returns a valid JSON block followed by the narrative.\n- JSON validates against the shape described above and numbers are realistic (non-negative, expected computed correctly).\n- The narrative includes a 5–12 item WBS and top 3 risk drivers with mitigations.\n\nSuggested next steps\n--------------------\n1. Create a GitHub issue from this file (title: \"Risk and Effort Edtimator Skill\").\n2. Add labels: `P0`, `feature`, `spec`.\n3. Assign a product owner (@product-owner) and link to this worklog file.\n4. Implement the skill (prototype using the draft prompt); expose the CLI command `opencode skill run risk-and-effort-edtimator`.\n5. Write automated tests validating JSON output shape and example estimates for 2–3 representative issues.\n\nNotes\n-----\n- This is a top-level P0 issue describing the desired new skill and the exact estimation output format required from the skill.\n- The skill must be conservative by default and must flag missing info rather than inventing it.",
+    "status": "open",
+    "priority": "high",
+    "parentId": null,
+    "createdAt": "2026-01-24T21:31:06.797Z",
+    "updatedAt": "2026-01-25T05:51:55.020Z",
+    "tags": [
+      "P0",
+      "feature",
+      "spec"
+    ],
+    "assignee": "@product-owner",
+    "stage": "plan_complete",
+    "issueType": "",
+    "createdBy": "",
+    "deletedBy": "",
+    "deleteReason": "",
+    "risk": "High",
+    "effort": "XL",
+    "githubIssueNumber": 3,
+    "githubIssueId": 3852122460,
+    "githubIssueUpdatedAt": "2026-01-24T21:37:58Z"
+  },
+  "comments": [],
+  "children": [
+    {
+      "id": "SA-0MKT9O9AY002COU8",
+      "title": "TEST: Synthetic issue for effort_and_risk skill (synthetic)",
+      "description": "This is a synthetic test issue created to exercise the effort_and_risk SKILL. It describes a scoped feature to estimate:\n\n- Summary: Add TOTP-based two-factor authentication to the web login flow (synthetic test).\n- Plan skeleton (for plan_complete later): design: API spec and UI; implementation: backend API + storage; frontend: login UI; tests: unit + e2e; rollout: phased feature flag; monitoring: auth metrics.\n- Note: This issue is a TEST issue. Do not treat as real production work.",
+      "status": "open",
+      "priority": "medium",
+      "parentId": "SA-0MKSTQR3H1HLD7HC",
+      "createdAt": "2026-01-25T04:57:04.283Z",
+      "updatedAt": "2026-01-25T04:58:06.692Z",
+      "tags": [
+        "effort_and_risk"
+      ],
+      "assignee": "",
+      "stage": "",
+      "issueType": "",
+      "createdBy": "",
+      "deletedBy": "",
+      "deleteReason": "",
+      "risk": "",
+      "effort": ""
+    },
+    {
+      "id": "SA-0MKTA5UVG015U9IQ",
+      "title": "TEST CHILD 1: part of SA-0MKT9O9AY002COU8",
+      "description": "Synthetic child issue 1 for effort_and_risk test. Not real work.",
+      "status": "open",
+      "priority": "medium",
+      "parentId": "SA-0MKT9O9AY002COU8",
+      "createdAt": "2026-01-25T05:10:45.388Z",
+      "updatedAt": "2026-01-25T05:10:45.388Z",
+      "tags": [
+        "test",
+        "synthetic"
+      ],
+      "assignee": "",
+      "stage": "",
+      "issueType": "",
+      "createdBy": "",
+      "deletedBy": "",
+      "deleteReason": "",
+      "risk": "",
+      "effort": ""
+    },
+    {
+      "id": "SA-0MKTA5XEJ0MEUXAT",
+      "title": "TEST CHILD 2: part of SA-0MKT9O9AY002COU8",
+      "description": "Synthetic child issue 2 for effort_and_risk test. Not real work.",
+      "status": "open",
+      "priority": "medium",
+      "parentId": "SA-0MKT9O9AY002COU8",
+      "createdAt": "2026-01-25T05:10:48.667Z",
+      "updatedAt": "2026-01-25T05:10:48.667Z",
+      "tags": [
+        "test",
+        "synthetic"
+      ],
+      "assignee": "",
+      "stage": "",
+      "issueType": "",
+      "createdBy": "",
+      "deletedBy": "",
+      "deleteReason": "",
+      "risk": "",
+      "effort": ""
+    },
+    {
+      "id": "SA-0MKTA5ZMA1XBAL0V",
+      "title": "TEST CHILD 3: part of SA-0MKT9O9AY002COU8",
+      "description": "Synthetic child issue 3 for effort_and_risk test. Not real work.",
+      "status": "open",
+      "priority": "medium",
+      "parentId": "SA-0MKT9O9AY002COU8",
+      "createdAt": "2026-01-25T05:10:51.539Z",
+      "updatedAt": "2026-01-25T05:10:51.539Z",
+      "tags": [
+        "test",
+        "synthetic"
+      ],
+      "assignee": "",
+      "stage": "",
+      "issueType": "",
+      "createdBy": "",
+      "deletedBy": "",
+      "deleteReason": "",
+      "risk": "",
+      "effort": ""
+    }
+  ],
+  "ancestors": []
+}

@@ -1,0 +1,4 @@
+name: packaged-ampa
+version: "0.1"
+description: Minimal workflow descriptor added for tests to allow engine initialization.
+workflows: []

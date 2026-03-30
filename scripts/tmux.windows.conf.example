@@ -1,0 +1,4 @@
+# window_name|working_directory|left_pane_command|top_right_pane_command
+Agents||opencode -c|wl tui
+Worklog|~/projects/Worklog|opencode -c|wl tui
+Arcade|~/projects/classic_arcade/test1|opencode -c|wl tui
