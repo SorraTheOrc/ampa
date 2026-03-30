@@ -23,7 +23,7 @@ classifiers = [
     "Topic :: Software Development :: Project Management",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-packages = [{include = "ampa"}]
+packages = [{include = "ampa", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
