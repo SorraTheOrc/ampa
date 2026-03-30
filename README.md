@@ -58,7 +58,7 @@ Configuration files are stored in the project's `.worklog/ampa/` directory.
 
 ```bash
 # Clone the repository
-git clone https://github.com/opencode/ampa.git
+git clone https://github.com/SorraTheOrc/ampa.git
 cd ampa
 
 # Install dependencies
@@ -118,12 +118,14 @@ Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) 
 
 ## License
 
-AMPA is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+AMPA is licensed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Related Projects
 
 - [OpenCode](https://github.com/opencode/opencode) - The core OpenCode project
 - [Worklog](https://github.com/opencode/worklog) - Project management tooling
+
+AMPA was originally developed as part of OpenCode but is now maintained as an independent project.
 
 ## Support
 

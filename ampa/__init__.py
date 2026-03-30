@@ -7,8 +7,8 @@ with workflow orchestration.
 """
 
 __version__ = "0.1.0"
-__author__ = "OpenCode"
-__license__ = "Apache-2.0"
+__author__ = "SorraTheOrc"
+__license__ = "MIT"
 
 from typing import Final
 
