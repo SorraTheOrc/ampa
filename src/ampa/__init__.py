@@ -15,3 +15,11 @@ __all__ = [
     "conversation_manager",
     "responder",
 ]
+
+# Package metadata expected by the test-suite and other tooling.
+# Keep these values in sync with pyproject.toml's [tool.poetry].
+PACKAGE_NAME = "ampa"
+VERSION = "0.1.0"
+
+# Export metadata
+__all__.extend(["PACKAGE_NAME", "VERSION"])
