@@ -12,6 +12,12 @@ SRC = os.path.join(ROOT, "src")
 if SRC not in sys.path:
     sys.path.insert(0, SRC)
 
+# Ensure repository root is on sys.path so top-level modules living at the
+# repository root (e.g. `skill/`, `scripts/`, `plan/`) can be imported by
+# tests that reference them as top-level packages.
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
 
 @pytest.fixture(autouse=True)
 def _limit_notification_retries(monkeypatch):
