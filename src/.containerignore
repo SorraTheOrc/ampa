@@ -1,0 +1,8 @@
+# Ignore local env files and other host-only artifacts when building the image
+.env
+.env.*
+node_modules
+.git
+dist
+build
+__pycache__

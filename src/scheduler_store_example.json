@@ -1,0 +1,598 @@
+{
+  "commands": {
+    "wl-in_progress": {
+      "command": "wl in_progress",
+      "frequency_minutes": 1,
+      "id": "wl-in_progress",
+      "title": "In Progress",
+      "max_runtime_minutes": 1,
+      "metadata": {
+        "discord_label": "wl in_progress"
+      },
+      "priority": 0,
+      "requires_llm": false,
+      "type": "shell"
+    },
+    "wl-stats": {
+      "command": "wl status",
+      "frequency_minutes": 10,
+      "id": "wl-stats",
+      "title": "Stats",
+      "max_runtime_minutes": 1,
+      "metadata": {
+        "discord_label": "wl status"
+      },
+      "priority": 0,
+      "requires_llm": false,
+      "type": "shell"
+    },
+    "cleanup-runner": {
+      "command": "python -m ampa.run_cleanup",
+      "frequency_minutes": 360,
+      "id": "cleanup-runner",
+      "title": "Cleanup Runner",
+      "max_runtime_minutes": 30,
+      "metadata": {
+        "discord_label": "cleanup runner",
+        "truncate_chars": 65536
+      },
+      "priority": 2,
+      "requires_llm": false,
+      "type": "command"
+    },
+    "gh-import": {
+      "command": "python -m ampa.run_gh_sync import",
+      "frequency_minutes": 30,
+      "id": "gh-import",
+      "title": "GitHub Issue Import",
+      "max_runtime_minutes": 5,
+      "metadata": {
+        "discord_label": "gh import"
+      },
+      "priority": 0,
+      "requires_llm": false,
+      "type": "shell"
+    },
+    "gh-push": {
+      "command": "python -m ampa.run_gh_sync push",
+      "frequency_minutes": 180,
+      "id": "gh-push",
+      "title": "GitHub Issue Push",
+      "max_runtime_minutes": 5,
+      "metadata": {
+        "discord_label": "gh push"
+      },
+      "priority": 0,
+      "requires_llm": false,
+      "type": "shell"
+    },
+    "wl-audit": {
+      "command": "true",
+      "frequency_minutes": 2,
+      "id": "wl-audit",
+      "title": "Audit",
+      "max_runtime_minutes": 5,
+      "metadata": {
+        "discord_label": "wl audit",
+        "audit_cooldown_hours": 6,
+        "audit_cooldown_hours_in_review": 1,
+        "truncate_chars": 65536
+      },
+      "priority": 0,
+      "requires_llm": false,
+      "type": "audit"
+    },
+    "delegation": {
+      "command": "",
+      "frequency_minutes": 2,
+      "id": "delegation",
+      "title": "Delegation Report",
+      "max_runtime_minutes": 5,
+      "metadata": {
+        "discord_label": "delegation report",
+        "audit_only": false
+      },
+      "priority": 0,
+      "requires_llm": false,
+      "type": "delegation"
+    },
+    "auto-delegate": {
+      "command": "echo auto-delegate",
+      "frequency_minutes": 30,
+      "id": "auto-delegate",
+      "title": "Auto Delegate",
+      "max_runtime_minutes": 5,
+      "metadata": {
+        "enabled": false,
+        "eligible_stages": ["plan_complete"],
+        "eligible_priorities": ["high", "critical"],
+        "max_retries": 3,
+        "retry_backoff_base_seconds": 2.0
+      },
+      "priority": 0,
+      "requires_llm": false,
+      "type": "auto-delegate"
+    },
+    "pr-monitor": {
+      "command": "python -m ampa.pr_monitor",
+      "frequency_minutes": 60,
+      "id": "pr-monitor",
+      "title": "PR Monitor",
+      "max_runtime_minutes": 10,
+      "metadata": {
+        "dedup": true,
+        "max_prs": 50,
+        "discord_label": "pr monitor",
+        "truncate_chars": 65536,
+        "container_dispatch_timeout_seconds": 600
+      },
+      "priority": 0,
+      "requires_llm": false,
+      "type": "pr-monitor"
+    }
+  },
+  "last_global_start_ts": "2026-02-05T07:51:52.053932+00:00",
+  "state": {
+    "wl-in_progress": {
+      "last_duration_seconds": 0.186871,
+      "last_exit_code": 0,
+      "last_output": "Found 5 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n│   Status: in_progress · Stage: in_review | Priority: medium\n│   Assignee: OpenCode\n├── Scheduler daemon updates and docs - SA-0ML95LRFD08CS2CZ\n│   Status: in_progress · Stage: in_review | Priority: medium\n│   Assignee: Patch\n└── Remove APMA container build workflow - SA-0ML95PIMU121DSNQ\n    Status: in_progress · Stage: plan_complete | Priority: medium\n    Assignee: Patch",
+      "last_run_ts": "2026-02-05T07:50:51.676005+00:00",
+      "last_start_ts": "2026-02-05T07:50:51.489134+00:00",
+      "run_history": [
+        {
+          "duration_seconds": 0.146389,
+          "end_ts": "2026-02-05T06:00:32.056733+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:00:31.910344+00:00"
+        },
+        {
+          "duration_seconds": 0.167574,
+          "end_ts": "2026-02-05T06:02:32.679510+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:02:32.511936+00:00"
+        },
+        {
+          "duration_seconds": 0.142124,
+          "end_ts": "2026-02-05T06:04:33.282738+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:04:33.140614+00:00"
+        },
+        {
+          "duration_seconds": 0.147045,
+          "end_ts": "2026-02-05T06:06:34.010331+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:06:33.863286+00:00"
+        },
+        {
+          "duration_seconds": 0.136067,
+          "end_ts": "2026-02-05T06:09:35.075514+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:09:34.939447+00:00"
+        },
+        {
+          "duration_seconds": 0.144847,
+          "end_ts": "2026-02-05T06:11:35.758272+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:11:35.613425+00:00"
+        },
+        {
+          "duration_seconds": 0.170257,
+          "end_ts": "2026-02-05T06:13:36.343566+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:13:36.173309+00:00"
+        },
+        {
+          "duration_seconds": 0.152526,
+          "end_ts": "2026-02-05T06:15:36.892771+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:15:36.740245+00:00"
+        },
+        {
+          "duration_seconds": 0.139852,
+          "end_ts": "2026-02-05T06:17:37.480479+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:17:37.340627+00:00"
+        },
+        {
+          "duration_seconds": 0.12971,
+          "end_ts": "2026-02-05T06:19:38.043857+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:19:37.914147+00:00"
+        },
+        {
+          "duration_seconds": 0.143977,
+          "end_ts": "2026-02-05T06:21:38.617904+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:21:38.473927+00:00"
+        },
+        {
+          "duration_seconds": 0.149564,
+          "end_ts": "2026-02-05T06:23:39.263857+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:23:39.114293+00:00"
+        },
+        {
+          "duration_seconds": 0.134791,
+          "end_ts": "2026-02-05T06:25:39.799043+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:25:39.664252+00:00"
+        },
+        {
+          "duration_seconds": 0.143904,
+          "end_ts": "2026-02-05T06:27:40.345155+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:27:40.201251+00:00"
+        },
+        {
+          "duration_seconds": 0.154225,
+          "end_ts": "2026-02-05T06:30:41.495909+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:30:41.341684+00:00"
+        },
+        {
+          "duration_seconds": 0.145806,
+          "end_ts": "2026-02-05T06:32:42.135188+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:32:41.989382+00:00"
+        },
+        {
+          "duration_seconds": 0.150612,
+          "end_ts": "2026-02-05T06:34:42.766917+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:34:42.616305+00:00"
+        },
+        {
+          "duration_seconds": 0.193378,
+          "end_ts": "2026-02-05T06:36:43.698999+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:36:43.505621+00:00"
+        },
+        {
+          "duration_seconds": 0.163822,
+          "end_ts": "2026-02-05T06:38:44.301029+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:38:44.137207+00:00"
+        },
+        {
+          "duration_seconds": 0.156418,
+          "end_ts": "2026-02-05T06:40:44.922411+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:40:44.765993+00:00"
+        },
+        {
+          "duration_seconds": 0.180657,
+          "end_ts": "2026-02-05T06:42:45.507235+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:42:45.326578+00:00"
+        },
+        {
+          "duration_seconds": 0.1392,
+          "end_ts": "2026-02-05T06:44:46.069169+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:44:45.929969+00:00"
+        },
+        {
+          "duration_seconds": 0.138699,
+          "end_ts": "2026-02-05T06:46:46.835008+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:46:46.696309+00:00"
+        },
+        {
+          "duration_seconds": 0.196055,
+          "end_ts": "2026-02-05T06:48:47.647373+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:48:47.451318+00:00"
+        },
+        {
+          "duration_seconds": 0.138828,
+          "end_ts": "2026-02-05T06:51:48.880290+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:51:48.741462+00:00"
+        },
+        {
+          "duration_seconds": 0.205342,
+          "end_ts": "2026-02-05T06:53:49.506924+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:53:49.301582+00:00"
+        },
+        {
+          "duration_seconds": 0.138124,
+          "end_ts": "2026-02-05T06:55:50.200652+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:55:50.062528+00:00"
+        },
+        {
+          "duration_seconds": 0.163887,
+          "end_ts": "2026-02-05T06:57:50.835927+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:57:50.672040+00:00"
+        },
+        {
+          "duration_seconds": 0.140345,
+          "end_ts": "2026-02-05T06:59:51.414792+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T06:59:51.274447+00:00"
+        },
+        {
+          "duration_seconds": 0.158247,
+          "end_ts": "2026-02-05T07:01:51.980918+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:01:51.822671+00:00"
+        },
+        {
+          "duration_seconds": 0.163396,
+          "end_ts": "2026-02-05T07:03:52.534363+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:03:52.370967+00:00"
+        },
+        {
+          "duration_seconds": 0.156878,
+          "end_ts": "2026-02-05T07:12:38.276283+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:12:38.119405+00:00"
+        },
+        {
+          "duration_seconds": 0.158312,
+          "end_ts": "2026-02-05T07:15:39.353922+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:15:39.195610+00:00"
+        },
+        {
+          "duration_seconds": 0.586403,
+          "end_ts": "2026-02-05T07:17:40.364549+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:17:39.778146+00:00"
+        },
+        {
+          "duration_seconds": 0.174445,
+          "end_ts": "2026-02-05T07:19:41.136663+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:19:40.962218+00:00"
+        },
+        {
+          "duration_seconds": 0.202989,
+          "end_ts": "2026-02-05T07:21:41.730137+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:21:41.527148+00:00"
+        },
+        {
+          "duration_seconds": 0.15171,
+          "end_ts": "2026-02-05T07:23:42.291606+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:23:42.139896+00:00"
+        },
+        {
+          "duration_seconds": 0.172224,
+          "end_ts": "2026-02-05T07:25:42.858371+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:25:42.686147+00:00"
+        },
+        {
+          "duration_seconds": 0.158423,
+          "end_ts": "2026-02-05T07:27:43.462434+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:27:43.304011+00:00"
+        },
+        {
+          "duration_seconds": 0.162134,
+          "end_ts": "2026-02-05T07:29:44.034543+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:29:43.872409+00:00"
+        },
+        {
+          "duration_seconds": 0.203198,
+          "end_ts": "2026-02-05T07:31:44.673391+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:31:44.470193+00:00"
+        },
+        {
+          "duration_seconds": 0.157079,
+          "end_ts": "2026-02-05T07:34:45.687403+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:34:45.530324+00:00"
+        },
+        {
+          "duration_seconds": 0.179774,
+          "end_ts": "2026-02-05T07:36:46.319794+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:36:46.140020+00:00"
+        },
+        {
+          "duration_seconds": 0.17161,
+          "end_ts": "2026-02-05T07:38:46.922936+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:38:46.751326+00:00"
+        },
+        {
+          "duration_seconds": 0.19743,
+          "end_ts": "2026-02-05T07:40:47.642759+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:40:47.445329+00:00"
+        },
+        {
+          "duration_seconds": 0.152261,
+          "end_ts": "2026-02-05T07:42:48.227066+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:42:48.074805+00:00"
+        },
+        {
+          "duration_seconds": 0.163845,
+          "end_ts": "2026-02-05T07:44:48.958824+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:44:48.794979+00:00"
+        },
+        {
+          "duration_seconds": 0.645393,
+          "end_ts": "2026-02-05T07:46:50.085290+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Run scheduler commands from daemon start directory - SA-0ML8WY28206CH92X\n│   Status: in_progress · Stage: plan_complete | Priority: medium\n│   Assignee: OpenCode\n└── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: OpenCode",
+          "start_ts": "2026-02-05T07:46:49.439897+00:00"
+        },
+        {
+          "duration_seconds": 0.189617,
+          "end_ts": "2026-02-05T07:48:50.913846+00:00",
+          "exit_code": 0,
+          "output": "Found 4 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n│   Status: in_progress · Stage: in_review | Priority: medium\n│   Assignee: OpenCode\n└── Scheduler daemon updates and docs - SA-0ML95LRFD08CS2CZ\n    Status: in_progress · Stage: in_review | Priority: medium\n    Assignee: Patch",
+          "start_ts": "2026-02-05T07:48:50.724229+00:00"
+        },
+        {
+          "duration_seconds": 0.186871,
+          "end_ts": "2026-02-05T07:50:51.676005+00:00",
+          "exit_code": 0,
+          "output": "Found 5 in_progress work item(s):\n\n├── Automated PM Agent — end-to-end project overseer - SA-0ML5E2A2V1YILTVR\n│   Status: in_progress · Stage: prd_complete | Priority: high\n│   └── AMPA Daemon: Discord heartbeat & notifier - SA-0ML7NOSHP0MJC6HS\n│       Status: in_progress · Stage: plan_complete | Priority: medium\n│       Assignee: Map\n├── Fix scheduler wl stats command - SA-0ML8XKRV80GORAL7\n│   Status: in_progress · Stage: in_review | Priority: medium\n│   Assignee: OpenCode\n├── Scheduler daemon updates and docs - SA-0ML95LRFD08CS2CZ\n│   Status: in_progress · Stage: in_review | Priority: medium\n│   Assignee: Patch\n└── Remove APMA container build workflow - SA-0ML95PIMU121DSNQ\n    Status: in_progress · Stage: plan_complete | Priority: medium\n    Assignee: Patch",
+          "start_ts": "2026-02-05T07:50:51.489134+00:00"
+        }
+      ],
+      "running": false
+    },
+    "wl-stats": {
+      "last_duration_seconds": 0.132173,
+      "last_exit_code": 1,
+      "last_output": "error: unknown command 'stats'\n(Did you mean status?)",
+      "last_run_ts": "2026-02-05T07:33:45.235052+00:00",
+      "last_start_ts": "2026-02-05T07:33:45.102879+00:00",
+      "run_history": [
+        {
+          "duration_seconds": 0.137534,
+          "end_ts": "2026-02-05T03:20:41.406026+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T03:20:41.268492+00:00"
+        },
+        {
+          "duration_seconds": 0.123217,
+          "end_ts": "2026-02-05T03:41:35.307775+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T03:41:35.184558+00:00"
+        },
+        {
+          "duration_seconds": 0.154305,
+          "end_ts": "2026-02-05T04:01:54.778542+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T04:01:54.624237+00:00"
+        },
+        {
+          "duration_seconds": 0.135245,
+          "end_ts": "2026-02-05T04:23:01.303795+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T04:23:01.168550+00:00"
+        },
+        {
+          "duration_seconds": 0.12046,
+          "end_ts": "2026-02-05T04:44:07.995810+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T04:44:07.875350+00:00"
+        },
+        {
+          "duration_seconds": 0.134263,
+          "end_ts": "2026-02-05T05:05:14.767117+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T05:05:14.632854+00:00"
+        },
+        {
+          "duration_seconds": 0.119772,
+          "end_ts": "2026-02-05T05:26:21.201690+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T05:26:21.081918+00:00"
+        },
+        {
+          "duration_seconds": 0.1237,
+          "end_ts": "2026-02-05T05:47:27.830354+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T05:47:27.706654+00:00"
+        },
+        {
+          "duration_seconds": 0.138538,
+          "end_ts": "2026-02-05T06:08:34.551372+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T06:08:34.412834+00:00"
+        },
+        {
+          "duration_seconds": 0.128972,
+          "end_ts": "2026-02-05T06:29:40.893006+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T06:29:40.764034+00:00"
+        },
+        {
+          "duration_seconds": 0.130377,
+          "end_ts": "2026-02-05T06:50:48.415902+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T06:50:48.285525+00:00"
+        },
+        {
+          "duration_seconds": 0.147581,
+          "end_ts": "2026-02-05T07:13:38.751977+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T07:13:38.604396+00:00"
+        },
+        {
+          "duration_seconds": 0.132173,
+          "end_ts": "2026-02-05T07:33:45.235052+00:00",
+          "exit_code": 1,
+          "output": "error: unknown command 'stats'\n(Did you mean status?)",
+          "start_ts": "2026-02-05T07:33:45.102879+00:00"
+        }
+      ],
+      "running": false
+    }
+  }
+}

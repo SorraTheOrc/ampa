@@ -1,0 +1,133 @@
+# Minimal Containerfile for Distrobox development containers.
+#
+# Most developer tooling (Node.js, wl, gh, opencode) comes from the host
+# via Distrobox's home directory mount (~/.local/bin, ~/.cargo/bin, etc.).
+#
+# Git and SSH are installed in the image itself because they must be linked
+# against the container's own shared libraries (OpenSSL, libpcre, etc.).
+# Using the host's git/ssh via /run/host causes version-mismatch crashes
+# (e.g. "OpenSSL version mismatch") since the host and container ship
+# different library versions.
+#
+# Build:
+#   podman build -t ampa-dev:latest ampa/
+#
+# Verify:
+#   podman build -t ampa-dev:latest ampa/ && podman images | grep ampa-dev
+
+FROM debian:stable-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH=/usr/local/bin:$PATH
+
+# Install packages needed by Distrobox, plus git and openssh-client which
+# must run natively inside the container to avoid shared-library conflicts
+# with the host.  Other developer tools (Python, Node.js, wl, gh) come
+# from the mounted home directory.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    bash \
+    bc \
+    bzip2 \
+    ca-certificates \
+    curl \
+    diffutils \
+    findutils \
+    git \
+    gnupg2 \
+    less \
+    lsof \
+    ncurses-base \
+     nodejs \
+     openssh-client \
+     passwd \
+     pinentry-curses \
+     python3 \
+     python3-pip \
+     python3-pytest \
+     python3-prometheus-client \
+     python3-yaml \
+     python3-venv \
+     procps \
+     sudo \
+    unzip \
+    wget \
+    xz-utils \
+    zip \
+ && rm -rf /var/lib/apt/lists/*
+
+# --- Playwright / Chromium layer -----------------------------------------------
+# Install npm (not bundled with the Debian nodejs package), then use the
+# Playwright CLI to pull in all Chromium system dependencies and the browser
+# binary.  PLAYWRIGHT_BROWSERS_PATH is set to a system-wide location so every
+# user inside the container can launch Chromium without extra per-user setup.
+#
+# playwright install-deps chromium  — installs all required apt packages
+# playwright install chromium       — downloads the Playwright-managed Chromium
+#
+# The final chmod ensures the binary tree is world-readable/executable so the
+# non-root dev user (and any Distrobox-remapped UID) can run the browser.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends npm \
+ && npm install -g playwright \
+ && playwright install-deps chromium \
+ && playwright install chromium \
+ && rm -rf /var/lib/apt/lists/* /root/.npm \
+ && chmod -R o+rx /ms-playwright
+
+# Create a non-root developer user. Distrobox will often enter the container
+# with the host UID; having a matching non-root user and home dir makes the
+# image friendlier for interactive use.
+RUN set -eux \
+ && useradd --create-home --shell /bin/bash dev \
+ && mkdir -p /home/dev/.local/bin \
+ && chown -R dev:dev /home/dev
+
+# Playwright / Chromium runtime
+# The AMPA dev container may include a pinned Playwright-compatible Chromium
+# runtime so that browser smoke tests can be executed inside claimed AMPA
+# containers. Pinning ensures reproducible validation evidence. Example pin:
+#   # PLAYWRIGHT: 1.42.0  (pinned for compatibility with Debian stable-slim)
+# Add the runtime and any additional system packages here when the project
+# elects to include browser support in the image.
+
+# Use the host-installed Worklog CLI entrypoint while avoiding legacy npm
+# worklog packages inside the container image.
+RUN printf '%s\n' '#!/bin/sh' 'exec /run/host/usr/bin/wl "$@"' > /usr/local/bin/wl \
+ && chmod +x /usr/local/bin/wl
+# Working directory where the project will be cloned inside the container.
+WORKDIR /workdir
+
+CMD ["/bin/bash"]
+
+# Playwright runtime and browser binary (needed for browser smoke tests).
+# Pin the Playwright package version via ARG so we can reproduce builds.
+# Recorded tag: 1.58.2
+ARG PLAYWRIGHT_VERSION=1.58.2
+
+# Install Playwright system dependencies, npm (for npx), and the Chromium
+# browser binary for the pinned Playwright version. This installs the
+# minimum set of libraries required by Chromium in Debian-based images.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    npm \
+    libnss3 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libxss1 \
+    libasound2 \
+    libgbm1 \
+    libx11-xcb1 \
+    libgtk-3-0 \
+ && rm -rf /var/lib/apt/lists/* \
+ # Ensure npm/npx available then install Chromium for the pinned playwright
+ && npx --yes playwright@${PLAYWRIGHT_VERSION} install --with-deps chromium
+
+# NOTE: After building the image, measure sizes with:
+#   podman build -t ampa-dev:latest ampa/ && podman images ampa-dev:latest --format "{{.Repository}}: {{.Size}}"
+# Record before/after image sizes and raise an Open Question if the image grows by >500MB.
