@@ -475,7 +475,7 @@ class Scheduler:
                     ShellWorkItemFetcher,
                     ShellWorkItemUpdater,
                 )
-                from .engine.descriptor import load_descriptor
+                from .engine.descriptor import load_descriptor, DescriptorValidationError
                 from .engine.invariants import InvariantEvaluator, NullQuerier
 
                 descriptor = None
@@ -491,7 +491,48 @@ class Scheduler:
                             "workflow.yaml",
                         ),
                     )
-                    descriptor = load_descriptor(descriptor_path)
+                    # Attempt to load the workflow descriptor explicitly and
+                    # provide a clear diagnostic on failure. Previously this
+                    # could raise or be swallowed by higher-level exception
+                    # handlers making audit failures opaque; make the
+                    # failure path explicit so operators see the attempted
+                    # path and receive a notification.
+                    try:
+                        descriptor = load_descriptor(descriptor_path)
+                    except FileNotFoundError as e:
+                        LOG.error(
+                            "Workflow descriptor file not found: %s",
+                            descriptor_path,
+                        )
+                        try:
+                            notifications_module.notify(
+                                title="Failed to load workflow descriptor",
+                                body=f"Descriptor file not found: {descriptor_path}\n{e}",
+                                message_type="error",
+                            )
+                        except Exception:
+                            LOG.exception(
+                                "Failed to send descriptor load failure notification"
+                            )
+                        # Abort audit handling when descriptor missing.
+                        return run
+                    except DescriptorValidationError as e:
+                        LOG.error(
+                            "Workflow descriptor validation failed for %s: %s",
+                            descriptor_path,
+                            e,
+                        )
+                        try:
+                            notifications_module.notify(
+                                title="Workflow descriptor validation failed",
+                                body=f"Descriptor path: {descriptor_path}\n{e}",
+                                message_type="error",
+                            )
+                        except Exception:
+                            LOG.exception(
+                                "Failed to send descriptor validation failure notification"
+                            )
+                        return run
 
                 evaluator = InvariantEvaluator(
                     invariants=descriptor.invariants,
