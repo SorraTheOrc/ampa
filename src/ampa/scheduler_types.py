@@ -46,7 +46,11 @@ def _from_iso(value: Optional[str]) -> Optional[dt.datetime]:
         v = value
         if isinstance(v, str) and v.endswith("Z"):
             v = v[:-1] + "+00:00"
-        return dt.datetime.fromisoformat(v)
+        parsed = dt.datetime.fromisoformat(v)
+        # Coerce naive datetimes to UTC for consistent comparisons.
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt.timezone.utc)
+        return parsed
     except Exception:
         return None
 
