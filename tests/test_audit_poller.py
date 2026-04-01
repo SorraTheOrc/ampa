@@ -130,3 +130,20 @@ def test_handler_success_updates_last_audit():
     assert state.get("last_audit_at_by_item", {}).get(item["id"]) == now.isoformat()
     # last_attempt_at_by_item should also be recorded
     assert state.get("last_attempt_at_by_item", {}).get(item["id"]) == now.isoformat()
+
+
+def test_query_candidates_prefers_older_updated_at():
+    # Two items with the same id but different updatedAt values. The
+    # deduplication logic should prefer the older (earlier) updatedAt
+    # representation.
+    older = {"id": "I-dup", "title": "Old", "updatedAt": "2020-01-01T00:00:00Z"}
+    newer = {"id": "I-dup", "title": "New", "updatedAt": "2021-01-01T00:00:00Z"}
+    run_shell = _make_run_shell_with_items([newer, older])
+
+    items = audit_poller._query_candidates(run_shell, cwd=".")
+    assert items is not None
+    # After deduplication there should be exactly one item with id I-dup
+    filtered = [it for it in items if it.get("id") == "I-dup"]
+    assert len(filtered) == 1
+    # The retained representation should be the older one
+    assert filtered[0].get("title") == "Old"
