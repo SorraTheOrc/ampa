@@ -1,0 +1,14 @@
+session_name: Dev
+windows:
+  - name: "AMPA"
+    cwd: "~/projects/ampa"
+    panes:
+      - cmd: "opencode -c"
+      - cmd: "wl tui"
+        split:
+          dir: vertical
+          size_pct: 50
+      - cmd: "clear"
+        split:
+          dir: horizontal
+          size_pct: 30

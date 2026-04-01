@@ -590,11 +590,6 @@ class TestCanonicalDescriptor:
         validate_delegation(canonical_json, result)
         assert result.errors == [], f"Delegation errors:\n" + "\n".join(result.errors)
 
-    @pytest.mark.xfail(
-        reason="Known drift: workflow.json has extra 'delegated' stage not in workflow.yaml. "
-        "JSON should be regenerated from the YAML source.",
-        strict=True,
-    )
     def test_tcd06_yaml_json_equivalent(
         self, canonical_json: dict, canonical_yaml: dict
     ) -> None:
@@ -608,11 +603,6 @@ class TestCanonicalDescriptor:
         Note: The YAML may use YAML-specific features (multi-line strings,
         flow mappings) that normalize differently from JSON.  Only logical
         structure is compared.
-
-        Currently marked xfail due to known stage drift (``delegated`` stage
-        in JSON not present in YAML).  When the drift is fixed, this marker
-        should be removed — ``strict=True`` ensures the test will loudly
-        fail if it starts passing unexpectedly.
         """
         # Version must match exactly
         assert canonical_yaml["version"] == canonical_json["version"]

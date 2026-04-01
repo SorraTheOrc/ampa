@@ -121,7 +121,7 @@ class TestLoadRealWorkflow:
     def test_stages(self, descriptor: WorkflowDescriptor) -> None:
         assert "idea" in descriptor.stages
         assert "done" in descriptor.stages
-        assert len(descriptor.stages) == 10  # delegated removed; uses in_progress + tag
+        assert len(descriptor.stages) == 11  # includes delegated stage
 
     def test_state_aliases(self, descriptor: WorkflowDescriptor) -> None:
         assert "idea" in descriptor.states

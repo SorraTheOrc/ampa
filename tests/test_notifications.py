@@ -394,6 +394,9 @@ class TestNotify:
         monkeypatch.setenv("AMPA_STATE_FILE", state_file)
         dl_file = str(tmp_path / "dead.log")
         monkeypatch.setenv("AMPA_DEADLETTER_FILE", dl_file)
+        # Clear CI env vars to avoid message_type override
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.delenv("CI", raising=False)
 
         async def _test():
             srv = _FakeSocketServer(sock)
@@ -469,6 +472,9 @@ class TestNotify:
         monkeypatch.setenv("AMPA_STATE_FILE", state_file)
         dl_file = str(tmp_path / "dead.log")
         monkeypatch.setenv("AMPA_DEADLETTER_FILE", dl_file)
+        # Clear CI env vars to avoid message_type override
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.delenv("CI", raising=False)
 
         result = notify("Error Title", "Error body", message_type="error")
         assert result is False
@@ -489,6 +495,9 @@ class TestNotify:
         monkeypatch.setenv("AMPA_BOT_SOCKET_PATH", sock)
         state_file = str(tmp_path / "state.json")
         monkeypatch.setenv("AMPA_STATE_FILE", state_file)
+        # Clear CI env vars to avoid message_type override
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.delenv("CI", raising=False)
 
         async def _test():
             srv = _FakeSocketServer(sock)

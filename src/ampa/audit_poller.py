@@ -102,10 +102,12 @@ class AuditHandoffHandler(Protocol):
 
         Returns:
             ``True`` if the audit completed successfully, ``False``
-            otherwise.  The poller does **not** alter its behaviour based
-            on this return value (the ``last_audit_at`` timestamp has
-            already been persisted before the handler is called), but
-            callers may use it for logging or metrics.
+            otherwise.  The poller will persist the ``last_audit_at``
+            timestamp only when the handler returns ``True``. The
+            handler's return value is therefore used to decide whether
+            the candidate should be considered successfully audited. The
+            poller may also record a per-item ``last_attempt_at`` for
+            observability when handlers fail or raise.
         """
         ...  # pragma: no cover
 
@@ -215,7 +217,11 @@ def _from_iso(value: Optional[str]) -> Optional[dt.datetime]:
         v = value
         if isinstance(v, str) and v.endswith("Z"):
             v = v[:-1] + "+00:00"
-        return dt.datetime.fromisoformat(v)
+        parsed = dt.datetime.fromisoformat(v)
+        # Coerce naive datetimes to UTC for consistent comparisons.
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=dt.timezone.utc)
+        return parsed
     except Exception:
         return None
 
@@ -340,8 +346,11 @@ def poll_and_handoff(
     1. Query ``wl list --stage in_review --json`` for candidate items.
     2. Filter candidates by store-based cooldown.
     3. Select the oldest eligible candidate.
-    4. Persist ``last_audit_at`` to the store **before** calling the handler.
-    5. Hand off the selected candidate to *handler*.
+    4. Hand off the selected candidate to *handler*.
+    5. Persist ``last_audit_at`` to the store **only when** the handler
+       indicates success (truthy return). The poller always attempts to
+       record a per-item ``last_attempt_at`` for observability regardless
+       of handler outcome.
 
     This function never raises.  All errors are caught, logged, and returned
     as a :class:`PollerResult` with the appropriate outcome.
@@ -422,23 +431,27 @@ def poll_and_handoff(
     title = selected.get("title") or selected.get("name") or "(no title)"
     LOG.info("Audit poller: selected candidate %s — %s", work_id, title)
 
-    # 6. Persist timestamp BEFORE handoff
+    # 6. Hand off to handler and persist timestamps based on outcome.
+    # Record a per-item last_attempt_at for observability regardless of
+    # success; update last_audit_at only when the handler indicates
+    # success by returning a truthy value.
     try:
-        state.setdefault("last_audit_at_by_item", {})
-        state["last_audit_at_by_item"][work_id] = now.isoformat()
+        success = bool(handler(selected))
+    except Exception:
+        LOG.exception("Audit handler raised for %s", work_id)
+        success = False
+
+    try:
+        # Best-effort: record the attempt timestamp
+        state.setdefault("last_attempt_at_by_item", {})
+        state["last_attempt_at_by_item"][work_id] = now.isoformat()
+        if success:
+            state.setdefault("last_audit_at_by_item", {})
+            state["last_audit_at_by_item"][work_id] = now.isoformat()
         store.update_state(spec.command_id, state)
     except Exception:
         LOG.exception(
-            "Failed to persist last_audit_at for %s; proceeding with handoff",
-            work_id,
-        )
-
-    # 7. Hand off to handler
-    try:
-        handler(selected)
-    except Exception:
-        LOG.exception(
-            "Audit handler raised for %s; timestamp already persisted", work_id
+            "Failed to persist audit timestamps for %s (success=%s)", work_id, success
         )
 
     return PollerResult(

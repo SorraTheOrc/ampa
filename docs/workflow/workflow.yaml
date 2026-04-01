@@ -76,6 +76,7 @@ stage:
   - prd_complete
   - plan_complete
   - in_progress
+  - delegated
   - in_review
   - audit_passed
   - audit_failed
@@ -96,14 +97,14 @@ states:
   # Note: worklog has no "delegated" stage; we use (in-progress, in_progress)
   # and rely on the "delegated" tag (added by the delegate command's effects)
   # to distinguish delegated items from manually-started ones.
-  delegated:     { status: in-progress, stage: in_progress }
+  delegated:     { status: in_progress, stage: delegated }
   audit_passed:  { status: completed, stage: audit_passed }
   audit_failed:  { status: in_progress, stage: audit_failed }
   escalated:     { status: blocked, stage: escalated }
 
   # --- Blocking states ---
   blocked_in_progress: { status: blocked, stage: in_progress }
-  blocked_delegated:   { status: blocked, stage: in_progress }
+  blocked_delegated:   { status: blocked, stage: delegated }
 
 terminal_states:
   - shipped
