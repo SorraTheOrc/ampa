@@ -193,13 +193,52 @@ def _query_candidates(
                     items.extend(v)
                     break
 
-    # Deduplicate by ID
+    # Deduplicate by ID.
+    # Prefer the representation with the older `updated_at` timestamp when
+    # duplicates are present. When timestamps are unavailable or equal, fall
+    # back to a deterministic tie-breaker (JSON-serialized ordering).
     unique: Dict[str, Dict[str, Any]] = {}
     for it in items:
         wid = it.get("id") or it.get("work_item_id") or it.get("work_item")
         if not wid:
             continue
-        unique[str(wid)] = {**it, "id": wid}
+        wid = str(wid)
+        candidate = {**it, "id": wid}
+
+        existing = unique.get(wid)
+        if existing is None:
+            unique[wid] = candidate
+            continue
+
+        # Attempt to compare update timestamps. _item_updated_ts may return
+        # None when no valid timestamp is present.
+        try:
+            existing_ts = _item_updated_ts(existing)
+        except Exception:
+            existing_ts = None
+        try:
+            candidate_ts = _item_updated_ts(candidate)
+        except Exception:
+            candidate_ts = None
+
+        if existing_ts is not None and candidate_ts is not None:
+            # Keep the older (earlier) timestamp
+            if candidate_ts < existing_ts:
+                unique[wid] = candidate
+        elif existing_ts is None and candidate_ts is None:
+            # Deterministic tie-breaker: choose the lexicographically smaller
+            # JSON representation (stable across runs).
+            existing_serial = json.dumps(existing, sort_keys=True, default=str)
+            candidate_serial = json.dumps(candidate, sort_keys=True, default=str)
+            unique[wid] = existing if existing_serial <= candidate_serial else candidate
+        else:
+            # One item has a timestamp while the other does not; prefer the one
+            # that includes a timestamp (more informative).
+            if candidate_ts is not None:
+                unique[wid] = candidate
+            else:
+                # keep existing
+                pass
 
     return list(unique.values())
 
