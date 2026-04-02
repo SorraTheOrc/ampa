@@ -2058,6 +2058,28 @@ async function startWork(projectRoot, workItemId, agentName, waitFlag, waitTimeo
   });
 }
 
+// Exported helper used by tests to build the container setup script fragment
+export function buildContainerSetupScript({ cName = 'cn', origin = 'https://example.com/repo.git', branch = 'main', projectRoot = '/', projectName = 'Project', hostConfig = '', wlProjectName = 'Project', wlPrefix = 'WL', workItemId = 'WL-1' } = {}) {
+  const containerProjectRoot = `/tmp/ampa_sandbox_${cName}/project`;
+  const parts = [
+    'set -e',
+    'CONTAINER_PROJECT_ROOT="' + containerProjectRoot + '"',
+    'rm -rf "\\${CONTAINER_PROJECT_ROOT}" || true',
+    'mkdir -p "$(dirname \\${CONTAINER_PROJECT_ROOT})" || true',
+    'echo "Preparing container-local project at \\${CONTAINER_PROJECT_ROOT}..."',
+    'if git clone --depth 1 "' + origin + '" "\\${CONTAINER_PROJECT_ROOT}" > /tmp/ampa_clone.log 2>&1; then',
+    '  echo "Clone succeeded into container-local path"',
+    '  if command -v id >/dev/null 2>&1; then CON_UID="$(id -u)"; CON_GID="$(id -g)"; else CON_UID=1000; CON_GID=1000; fi',
+    '  sudo chown -R "\\${CON_UID}:\\${CON_GID}" "\\${CONTAINER_PROJECT_ROOT}" || true',
+    'else',
+    '  echo "Clone to container-local path failed; showing diagnostic"',
+    '  cat /tmp/ampa_clone.log || true',
+    '  exit 1',
+    'fi',
+  ];
+  return parts.join('\n');
+}
+
 /**
  * Finish work in a dev container: commit, push, update work item, destroy container.
  */
