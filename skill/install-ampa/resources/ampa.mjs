@@ -1791,23 +1791,23 @@ async function startWork(projectRoot, workItemId, agentName, waitFlag, waitTimeo
     // Use /tmp so the sandbox lives on the container's writable tmpfs/overlay
     // rather than under /opt which may be root-owned or backed by a host bind.
     `CONTAINER_PROJECT_ROOT="/tmp/ampa_sandbox_${cName}/project"`,
-    `rm -rf "${CONTAINER_PROJECT_ROOT}" || true`,
-    `mkdir -p "$(dirname ${CONTAINER_PROJECT_ROOT})" || true`,
-    `echo "Preparing container-local project at ${CONTAINER_PROJECT_ROOT}..."`,
-    `if git clone --depth 1 "${origin}" "${CONTAINER_PROJECT_ROOT}" > /tmp/ampa_clone.log 2>&1; then`,
+    `rm -rf "\${CONTAINER_PROJECT_ROOT}" || true`,
+    `mkdir -p "$(dirname \${CONTAINER_PROJECT_ROOT})" || true`,
+    `echo "Preparing container-local project at \${CONTAINER_PROJECT_ROOT}..."`,
+    `if git clone --depth 1 "${origin}" "\${CONTAINER_PROJECT_ROOT}" > /tmp/ampa_clone.log 2>&1; then`,
     `  echo "Clone succeeded into container-local path"`,
     // Prefer numeric uid/gid chown to avoid depending on a "dev" user existing
     `  if command -v id >/dev/null 2>&1; then CON_UID="$(id -u)"; CON_GID="$(id -g)"; else CON_UID=1000; CON_GID=1000; fi`,
-    `  sudo chown -R "\${CON_UID}:\${CON_GID}" "${CONTAINER_PROJECT_ROOT}" || true`,
+    `  sudo chown -R "\${CON_UID}:\${CON_GID}" "\${CONTAINER_PROJECT_ROOT}" || true`,
     `else`,
     `  echo "Clone to container-local path failed; showing diagnostic"`,
     `  cat /tmp/ampa_clone.log || true`,
     `  exit 1`,
     `fi`,
-    `cd "${CONTAINER_PROJECT_ROOT}"`,
+    `cd "\${CONTAINER_PROJECT_ROOT}"`,
     // Create a symlink from the expected /workdir/project location to the actual clone location
     `if [ ! -e /workdir/project ]; then`,
-    `  sudo ln -s "${CONTAINER_PROJECT_ROOT}" /workdir/project`,
+    `  sudo ln -s "\${CONTAINER_PROJECT_ROOT}" /workdir/project`,
     `fi`,
     // Check if branch exists on remote
     `if git ls-remote --heads origin "${branch}" | grep -q "${branch}"; then`,
