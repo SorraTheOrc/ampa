@@ -143,6 +143,9 @@ def _build_command_listing(
                 "description": _command_description(spec),
                 "last_run": _to_iso(last_run),
                 "next_run": _to_iso(next_run),
+                # Expose running state for callers that want to partition
+                # active (running) vs inactive commands.
+                "running": bool(state.get("running", False)),
             }
         )
     rows.sort(key=lambda row: row.get("id") or "")
@@ -199,13 +202,70 @@ def _format_command_table(rows: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _format_inactive_command_table(rows: List[Dict[str, Any]]) -> str:
+    """Format a compact table for inactive (idle) commands.
+
+    This omits the `next_run` column as it is not relevant for idle
+    commands per operator guidance.
+    """
+    if not rows:
+        return "No commands configured."
+
+    headers = ["id", "name", "description", "last_run"]
+    formatted: List[List[str]] = []
+    for row in rows:
+        description = _truncate_text(str(row.get("description") or ""), 60)
+        last_run = row.get("last_run") or "never"
+        if last_run not in ("never", None):
+            parsed = _from_iso(str(last_run))
+            if parsed is not None:
+                last_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M")
+        formatted.append([
+            str(row.get("id") or ""),
+            str(row.get("name") or ""),
+            description,
+            str(last_run),
+        ])
+
+    widths = [len(h) for h in headers]
+    for row in formatted:
+        for idx, value in enumerate(row):
+            widths[idx] = max(widths[idx], len(value))
+
+    lines = ["  ".join(h.ljust(widths[idx]) for idx, h in enumerate(headers))]
+    lines.append("  ".join("-" * width for width in widths))
+    for row in formatted:
+        lines.append("  ".join(row[idx].ljust(widths[idx]) for idx in range(len(headers))))
+    return "\n".join(lines)
+
+
 def _cli_list(args: argparse.Namespace) -> int:
     store = _store_from_env()
     rows = _build_command_listing(store)
     if getattr(args, "json", False):
+        # When JSON is requested, output the raw rows as before.
         print(json.dumps(rows, indent=2, sort_keys=True))
+        return 0
+
+    # Partition into active (running=True) and inactive
+    active = [r for r in rows if r.get("running")]
+    inactive = [r for r in rows if not r.get("running")]
+
+    # Print active commands first
+    if active:
+        print("Active commands:")
+        print(_format_command_table(active))
     else:
-        print(_format_command_table(rows))
+        print("No active commands.")
+
+    # Then print inactive commands in a separate compact table (omit next_run)
+    if inactive:
+        print("")
+        print("Inactive commands:")
+        print(_format_inactive_command_table(inactive))
+    else:
+        print("")
+        print("No inactive commands.")
     return 0
 
 

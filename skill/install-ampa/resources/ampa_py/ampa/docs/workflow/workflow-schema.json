@@ -1,0 +1,20 @@
+// This file is a copy of docs/workflow/workflow-schema.json from the repo.
+// It is placed into the installer resources so the packaged workflow.yaml can
+// validate against the schema when the installed daemon starts inside the
+// project's config location.
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://anomaly.co/schemas/workflow/v1.0.0/workflow-schema.json",
+  "title": "Workflow Descriptor",
+  "description": "Minimal placeholder schema copied into installer resources.",
+  "type": "object",
+  "properties": {
+    "version": { "type": "string" },
+    "metadata": { "type": "object" },
+    "status": { "type": "array" },
+    "stage": { "type": "array" },
+    "invariants": { "type": "object" },
+    "commands": { "type": "array" }
+  },
+  "required": ["version"]
+}
