@@ -69,3 +69,29 @@ def test_poll_and_handoff_returns_query_failed_on_nonzero_rc():
 
     res = audit_poller.poll_and_handoff(run_shell=run_shell, cwd=".", store=store, spec=spec, handler=handler)
     assert res.outcome == audit_poller.PollerOutcome.query_failed
+
+
+def test_poll_and_handoff_query_failed_on_nonzero_returncode():
+    # Explicit test requested: non-zero return code -> query_failed
+    run_shell = _make_run_shell("[]", returncode=3, stderr="boom")
+    store = _DummyStore()
+    spec = SimpleNamespace(command_id="cmd-rc-explicit", metadata={})
+
+    def handler(_):
+        raise AssertionError("handler should not be invoked on non-zero rc")
+
+    res = audit_poller.poll_and_handoff(run_shell=run_shell, cwd=".", store=store, spec=spec, handler=handler)
+    assert res.outcome == audit_poller.PollerOutcome.query_failed
+
+
+def test_poll_and_handoff_no_candidates_returns_no_candidates():
+    # When the query returns an empty list, poll_and_handoff should report no_candidates
+    run_shell = _make_run_shell("[]", returncode=0)
+    store = _DummyStore()
+    spec = SimpleNamespace(command_id="cmd-empty", metadata={})
+
+    def handler(_):
+        raise AssertionError("handler should not be invoked when there are no candidates")
+
+    res = audit_poller.poll_and_handoff(run_shell=run_shell, cwd=".", store=store, spec=spec, handler=handler)
+    assert res.outcome == audit_poller.PollerOutcome.no_candidates

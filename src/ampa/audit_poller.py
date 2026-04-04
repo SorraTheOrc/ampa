@@ -360,15 +360,23 @@ def _select_candidate(
     if not candidates:
         return None
 
-    sorted_candidates = sorted(
-        candidates,
-        key=lambda it: (
-            _item_updated_ts(it) is not None,
-            _item_updated_ts(it) or dt.datetime.fromtimestamp(0, dt.timezone.utc),
-        ),
-    )
+    # Precompute parsed timestamps once per candidate to avoid reparsing
+    # during comparison (performance and determinism improvement).
+    epoch = dt.datetime.fromtimestamp(0, dt.timezone.utc)
+    augmented: List[tuple[Dict[str, Any], Optional[dt.datetime]]] = []
+    for it in candidates:
+        try:
+            parsed = _item_updated_ts(it)
+        except Exception:
+            # Be conservative: on parse error treat as missing timestamp
+            parsed = None
+        augmented.append((it, parsed))
 
-    return sorted_candidates[0]
+    # Sort by (has_timestamp, timestamp_or_epoch) so that items with no
+    # timestamp sort first (considered oldest), then by ascending timestamp.
+    augmented.sort(key=lambda pair: (pair[1] is not None, pair[1] or epoch))
+
+    return augmented[0][0]
 
 
 # ---------------------------------------------------------------------------
