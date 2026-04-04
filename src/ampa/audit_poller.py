@@ -194,11 +194,15 @@ def _query_candidates(
                     break
 
     # Deduplicate by ID.
-    # Prefer the representation with the older `updated_at` timestamp when
+    # Prefer the representation with the newer `updated_at` timestamp when
     # duplicates are present. When timestamps are unavailable or equal, fall
     # back to a deterministic tie-breaker (JSON-serialized ordering).
     unique: Dict[str, Dict[str, Any]] = {}
     for it in items:
+        # Be defensive: skip non-dict entries that may appear in mixed-type
+        # lists returned by upstream providers (e.g. stray strings/nulls).
+        if not isinstance(it, dict):
+            continue
         wid = it.get("id") or it.get("work_item_id") or it.get("work_item")
         if not wid:
             continue
@@ -222,8 +226,8 @@ def _query_candidates(
             candidate_ts = None
 
         if existing_ts is not None and candidate_ts is not None:
-            # Keep the older (earlier) timestamp
-            if candidate_ts < existing_ts:
+            # Keep the newer (later) timestamp
+            if candidate_ts > existing_ts:
                 unique[wid] = candidate
         elif existing_ts is None and candidate_ts is None:
             # Deterministic tie-breaker: choose the lexicographically smaller
