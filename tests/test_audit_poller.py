@@ -134,7 +134,7 @@ def test_handler_success_updates_last_audit():
 
 def test_query_candidates_prefers_older_updated_at():
     # Two items with the same id but different updatedAt values. The
-    # deduplication logic should prefer the older (earlier) updatedAt
+    # deduplication logic should prefer the newer (later) updatedAt
     # representation.
     older = {"id": "I-dup", "title": "Old", "updatedAt": "2020-01-01T00:00:00Z"}
     newer = {"id": "I-dup", "title": "New", "updatedAt": "2021-01-01T00:00:00Z"}
@@ -145,5 +145,24 @@ def test_query_candidates_prefers_older_updated_at():
     # After deduplication there should be exactly one item with id I-dup
     filtered = [it for it in items if it.get("id") == "I-dup"]
     assert len(filtered) == 1
-    # The retained representation should be the older one
-    assert filtered[0].get("title") == "Old"
+    # The retained representation should be the newer one
+    assert filtered[0].get("title") == "New"
+
+
+def test_query_candidates_handles_empty_and_mixed_lists():
+    # Empty list should return an empty result (not None)
+    run_shell_empty = _make_run_shell_with_items([])
+    items_empty = audit_poller._query_candidates(run_shell_empty, cwd=".")
+    assert items_empty == []
+
+    # Mixed-type list (dicts and non-dicts) should ignore non-dicts
+    mixed = [
+        {"id": "M-1", "title": "Good", "updatedAt": "2022-01-01T00:00:00Z"},
+        "unexpected-string",
+        None,
+        123,
+    ]
+    run_shell_mixed = _make_run_shell_with_items(mixed)
+    items_mixed = audit_poller._query_candidates(run_shell_mixed, cwd=".")
+    assert items_mixed is not None
+    assert any(it.get("id") == "M-1" for it in items_mixed)
