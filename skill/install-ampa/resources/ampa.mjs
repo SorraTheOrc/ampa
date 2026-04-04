@@ -94,6 +94,70 @@ function resolveAmpaPackage(projectRoot) {
   return null;
 }
 
+/**
+ * Determine the best workflow descriptor path to provide to the Python daemon.
+ * Resolution order:
+ *  - <projectRoot>/.worklog/ampa/workflow.yaml (per-project override)
+ *  - <packageDir>/ampa/docs/workflow/workflow.yaml (package-provided)
+ *  - <globalOpenCodeDir>/.worklog/ampa/workflow.yaml (global published copy)
+ */
+function discoverWorkflowDescriptor(projectRoot, pyPath) {
+  const projectWorkflow = path.join(projectRoot, '.worklog', 'ampa', 'workflow.yaml');
+  if (fs.existsSync(projectWorkflow)) return projectWorkflow;
+
+  // Prefer a global published workflow (from installer) over the package
+  // provided descriptor because package descriptors may use repository-root
+  // relative schema paths which are not available when installed under
+  // XDG_CONFIG_HOME. The global published copy is self-contained.
+  const globalWorkflow = path.join(globalAmpaDir(), 'workflow.yaml');
+  try {
+    if (fs.existsSync(globalWorkflow)) return globalWorkflow;
+  } catch (e) {}
+
+  try {
+    if (pyPath) {
+      const pkgWorkflow = path.join(pyPath, 'ampa', 'docs', 'workflow', 'workflow.yaml');
+      if (fs.existsSync(pkgWorkflow)) return pkgWorkflow;
+    }
+  } catch (e) {}
+  return null;
+}
+
+/**
+ * Ensure a minimal per-project scheduler_store.json exists so the daemon has
+ * a usable store path. Copies from known package locations when available or
+ * writes a minimal default JSON.
+ */
+function ensureProjectSchedulerStore(projectRoot) {
+  try {
+    const ampaDir = projectAmpaDir(projectRoot);
+    const projectStore = path.join(ampaDir, 'scheduler_store.json');
+    if (fs.existsSync(projectStore)) return;
+
+    // Try per-project package store (project-local plugin)
+    const candidate1 = path.join(projectRoot, '.worklog', 'plugins', 'ampa_py', 'ampa', 'scheduler_store.json');
+    if (fs.existsSync(candidate1)) {
+      fs.mkdirSync(ampaDir, { recursive: true });
+      fs.copyFileSync(candidate1, projectStore);
+      return;
+    }
+
+    // Try global plugin package store
+    const candidate2 = path.join(globalPluginsDir(), 'ampa_py', 'ampa', 'scheduler_store.json');
+    if (fs.existsSync(candidate2)) {
+      fs.mkdirSync(ampaDir, { recursive: true });
+      fs.copyFileSync(candidate2, projectStore);
+      return;
+    }
+
+    // As a last resort, create a minimal default store
+    fs.mkdirSync(ampaDir, { recursive: true });
+    fs.writeFileSync(projectStore, JSON.stringify({ commands: {}, state: {}, last_global_start_ts: null }, null, 2), 'utf8');
+  } catch (e) {
+    // best-effort: do not throw — failures will surface when daemon starts
+  }
+}
+
 function findProjectRoot(start) {
   let cur = path.resolve(start);
   for (let i = 0; i < 100; i++) {
@@ -189,12 +253,14 @@ async function resolveCommand(cliCmd, projectRoot) {
   if (pkg) {
     const { pyPath, pythonBin } = pkg;
     const launcher = `import sys; sys.path.insert(0, ${JSON.stringify(pyPath)}); import ampa.daemon as d; d.main()`;
-    // Run the daemon in long-running mode by default (start scheduler).
-    // Users can override via --cmd or AMPA_RUN_SCHEDULER env var if desired.
+    // Determine workflow descriptor to pass to the daemon
+    const wf = discoverWorkflowDescriptor(projectRoot, pyPath);
+    const env = { PYTHONPATH: pyPath, AMPA_RUN_SCHEDULER: '1' };
+    if (wf) env.AMPA_WORKFLOW_DESCRIPTOR = wf;
     // use -u to force unbuffered stdout/stderr so logs show up promptly
     return {
       cmd: [pythonBin, '-u', '-c', launcher, '--start-scheduler'],
-      env: { PYTHONPATH: pyPath, AMPA_RUN_SCHEDULER: '1' },
+      env,
     };
   }
   return null;
@@ -214,9 +280,12 @@ async function resolveRunOnceCommand(projectRoot, commandId, extraArgs = []) {
   const pkg = resolveAmpaPackage(projectRoot);
   if (pkg) {
     const { pyPath, pythonBin } = pkg;
+    const wf = discoverWorkflowDescriptor(projectRoot, pyPath);
+    const env = { PYTHONPATH: pyPath };
+    if (wf) env.AMPA_WORKFLOW_DESCRIPTOR = wf;
     return {
       cmd: [pythonBin, ...baseArgs],
-      env: { PYTHONPATH: pyPath },
+      env,
       envPaths: [envPath],
     };
   }
@@ -240,9 +309,12 @@ async function resolveListCommand(projectRoot, useJson) {
   const pkg = resolveAmpaPackage(projectRoot);
   if (pkg) {
     const { pyPath, pythonBin } = pkg;
+    const wf = discoverWorkflowDescriptor(projectRoot, pyPath);
+    const env = { PYTHONPATH: pyPath };
+    if (wf) env.AMPA_WORKFLOW_DESCRIPTOR = wf;
     return {
       cmd: [pythonBin, '-u', ...args],
-      env: { PYTHONPATH: pyPath },
+      env,
       envPaths: [envPath],
     };
   }
@@ -511,6 +583,10 @@ function findMostRecentLog(projectRoot) {
 async function start(projectRoot, cmd, name = 'default', foreground = false) {
   const ppath = pidPath(projectRoot, name);
   const lpath = logPath(projectRoot, name);
+  // Ensure a project-local scheduler_store.json exists so the daemon has a
+  // known store path. This is best-effort and will create a minimal store
+  // if none is available from package resources.
+  ensureProjectSchedulerStore(projectRoot);
   if (fs.existsSync(ppath)) {
     try {
       const pid = parseInt(fs.readFileSync(ppath, 'utf8'), 10);

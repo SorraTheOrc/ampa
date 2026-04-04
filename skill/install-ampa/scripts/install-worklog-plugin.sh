@@ -1279,8 +1279,38 @@ main() {
      exit 2
    fi
 
-   # Ensure scheduler store exists in the project runtime location.
-   ensure_project_scheduler_store
+    # Ensure scheduler store exists in the project runtime location.
+    ensure_project_scheduler_store
+
+    # If this was a global installation, publish the canonical workflow
+    # descriptor into the global ampa config directory so that daemons started
+    # in arbitrary projects can discover the descriptor via
+    # AMPA_WORKFLOW_DESCRIPTOR (ampa.mjs will prefer project-local and then
+    # global .worklog/ampa/workflow.yaml).
+    if [ "$LOCAL_INSTALL" -eq 0 ] && [ "$TARGET_DIR" = "$GLOBAL_PLUGINS_DIR" ]; then
+      # global ampa config dir (match ampa.mjs globalAmpaDir())
+      xdg_base="${XDG_CONFIG_HOME:-$HOME/.config}"
+      global_ampa_dir="$xdg_base/opencode/.worklog/ampa"
+      mkdir -p "$global_ampa_dir"
+
+      # Candidate workflow locations inside the just-installed package
+      plugin_workflow="$TARGET_DIR/ampa_py/ampa/docs/workflow/workflow.yaml"
+      bundled_workflow="$SCRIPT_DIR/../resources/ampa_py/ampa/docs/workflow/workflow.yaml"
+
+      if [ -f "$plugin_workflow" ]; then
+        if cp -p "$plugin_workflow" "$global_ampa_dir/workflow.yaml" 2>/dev/null || cp "$plugin_workflow" "$global_ampa_dir/workflow.yaml" 2>/dev/null; then
+          log_info "Published workflow descriptor to $global_ampa_dir/workflow.yaml"
+          log_decision "PUBLISHED_WORKFLOW=$global_ampa_dir/workflow.yaml"
+        fi
+      elif [ -f "$bundled_workflow" ]; then
+        if cp -p "$bundled_workflow" "$global_ampa_dir/workflow.yaml" 2>/dev/null || cp "$bundled_workflow" "$global_ampa_dir/workflow.yaml" 2>/dev/null; then
+          log_info "Published workflow descriptor (from bundled resources) to $global_ampa_dir/workflow.yaml"
+          log_decision "PUBLISHED_WORKFLOW_BUNDLED=$global_ampa_dir/workflow.yaml"
+        fi
+      else
+        log_decision "PUBLISHED_WORKFLOW=skipped_missing_descriptor"
+      fi
+    fi
 
    # Handle .env file configuration
    if [ "$SKIP_BOT_CONFIG_UPDATE" -eq 1 ] || [ "$preserve_existing_env" -eq 1 ]; then

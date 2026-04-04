@@ -473,7 +473,19 @@ def load_descriptor(
             )
 
     # Schema validation
-    _validate_against_schema(data, schema_path)
+    # Prefer a schema colocated with the descriptor file (e.g. when the
+    # descriptor has been copied into .worklog/ampa with its schema). This
+    # allows runtime-installed instances to validate descriptors without
+    # requiring repository-root resolution.
+    try:
+        local_schema = file_path.parent / "workflow-schema.json"
+        if local_schema.exists():
+            _validate_against_schema(data, local_schema)
+        else:
+            _validate_against_schema(data, schema_path)
+    except Exception:
+        # Re-raise so callers get the detailed DescriptorValidationError
+        raise
 
     # Parse into typed model
     metadata = _parse_metadata(data["metadata"])
