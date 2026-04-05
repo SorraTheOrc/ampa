@@ -63,16 +63,17 @@ def load_env() -> None:
     """
     # Allow callers/tests to disable loading the .env file by setting
     # AMPA_LOAD_DOTENV=0.
-    if (
-        os.getenv("AMPA_LOAD_DOTENV", "1").lower() not in ("1", "true", "yes")
-        or not load_dotenv
-    ):
+    ampa_load = os.getenv("AMPA_LOAD_DOTENV", "1").lower()
+    if ampa_load not in ("1", "true", "yes") or not load_dotenv:
+        LOG.info("AMPA_LOAD_DOTENV=%r prevents loading .env files or dotenv not available", ampa_load)
         return
 
     # 1. Per-project .env  (<projectRoot>/.worklog/ampa/.env)
     project_env = os.path.join(_project_ampa_dir(), ".env")
+    LOG.info("Checking for project .env at %s", project_env)
     if os.path.isfile(project_env):
         load_dotenv(project_env, override=True)
+        LOG.info("Loaded environment overrides from %s", project_env)
         return
 
     # 1a. User-level XDG config .env (e.g. $XDG_CONFIG_HOME/opencode/.worklog/ampa/.env
@@ -84,8 +85,10 @@ def load_env() -> None:
     try:
         xdg_base = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
         xdg_env = os.path.join(xdg_base, "opencode", ".worklog", "ampa", ".env")
+        LOG.info("Checking for XDG user .env at %s", xdg_env)
         if os.path.isfile(xdg_env):
             load_dotenv(xdg_env, override=True)
+            LOG.info("Loaded environment overrides from %s", xdg_env)
             return
     except Exception:
         # Be conservative: any error here should not prevent other fallbacks.
@@ -93,19 +96,27 @@ def load_env() -> None:
 
     # 2. Package-local .env (backward compat for single-project / local installs)
     pkg_env_path = os.path.join(os.path.dirname(__file__), ".env")
+    LOG.info("Checking for package-local .env at %s", pkg_env_path)
     if find_dotenv:
         found = find_dotenv(pkg_env_path, usecwd=True)
         if found:
             load_dotenv(found, override=True)
+            LOG.info("Loaded environment overrides from %s", found)
             return
     elif os.path.isfile(pkg_env_path):
         load_dotenv(pkg_env_path, override=True)
+        LOG.info("Loaded environment overrides from %s", pkg_env_path)
         return
 
     # 3. Legacy repo-root .env
     root_env = os.path.join(os.getcwd(), ".env")
+    LOG.info("Checking for repo-root .env at %s", root_env)
     if os.path.isfile(root_env):
         load_dotenv(root_env, override=True)
+        LOG.info("Loaded environment overrides from %s", root_env)
+        return
+
+    LOG.info("No .env file found by load_env; proceeding with existing environment")
 
 
 def get_env_config() -> Dict[str, Any]:
