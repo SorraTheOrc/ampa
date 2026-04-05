@@ -1259,6 +1259,13 @@ main() {
         exit 2
       fi
       setup_python_package
+    # Prefer a repository-local src/ampa when present (common monorepo layout)
+    elif [ -d "src/ampa" ]; then
+      if ! copy_python_package "src/ampa"; then
+        log_error "Critical: failed to copy AMPA from repo src/ampa directory"
+        exit 2
+      fi
+      setup_python_package
     elif [ -d "$CONFIG_AMPA_DIR" ]; then
       log_info "Copying AMPA package from $CONFIG_AMPA_DIR"
       if ! copy_python_package "$CONFIG_AMPA_DIR"; then
