@@ -308,10 +308,27 @@ def _filter_by_cooldown(
             continue
 
         last_audit_iso = last_audit_by_item.get(wid)
+        last_audit = None
         if last_audit_iso:
             last_audit = _from_iso(last_audit_iso)
-            if last_audit is not None and (now - last_audit) < cooldown_delta:
-                continue
+
+        # If the item has been updated since the last successful audit,
+        # consider it eligible immediately regardless of cooldown. This
+        # implements: "audit any item that has been modified since the
+        # last time it was audited and is in the in_review stage."  When
+        # update timestamps are not available we fall back to the normal
+        # cooldown logic.
+        try:
+            updated_ts = _item_updated_ts(item)
+        except Exception:
+            updated_ts = None
+
+        if last_audit is not None and updated_ts is not None and updated_ts > last_audit:
+            eligible.append(item)
+            continue
+
+        if last_audit is not None and (now - last_audit) < cooldown_delta:
+            continue
 
         eligible.append(item)
 
@@ -482,7 +499,61 @@ def poll_and_handoff(
     title = selected.get("title") or selected.get("name") or "(no title)"
     LOG.info("Audit poller: selected candidate %s — %s", work_id, title)
 
-    # 6. Hand off to handler and persist timestamps based on outcome.
+    # 6. Before handing off to the descriptor-driven handler, attempt to
+    # re-fetch the full work item so we can validate its current
+    # (status, stage).  Some backends return minimal fields from
+    # `wl list --json` and the handler will re-fetch later, but that
+    # causes noisy "invalid_from_state" warnings when items have a
+    # mismatched status (e.g. status=completed with stage=in_review).  To
+    # avoid repeatedly selecting such candidates, re-fetch here and skip
+    # items whose status is not the expected "in_progress" value.
+    #
+    # If the fetch fails for any reason we fall through and call the
+    # handler (preserving the previous behavior) so operators still see
+    # diagnostic output.
+    try:
+        fetch_cmd = f"wl show {work_id} --children --json"
+        proc = run_shell(fetch_cmd, shell=True, check=False, capture_output=True, text=True, cwd=cwd, timeout=60)
+        if proc.returncode == 0 and proc.stdout:
+            try:
+                payload = json.loads(proc.stdout)
+                # Work item may be wrapped under 'workItem' — normalize
+                wi = payload.get("workItem") or payload
+                status_val = (wi.get("status") or "").strip().lower()
+                # Normalize common variants to a canonical form
+                status_norm = status_val.replace("-", "_").replace(" ", "_")
+                if status_norm != "in_progress":
+                    LOG.info(
+                        "Audit poller: skipping candidate %s due to status=%r (expected in_progress)",
+                        work_id,
+                        status_val,
+                    )
+                    # Record an attempt timestamp so we don't repeatedly
+                    # re-select this candidate on the next cycle.
+                    try:
+                        state.setdefault("last_attempt_at_by_item", {})
+                        state["last_attempt_at_by_item"][work_id] = now.isoformat()
+                        store.update_state(spec.command_id, state)
+                    except Exception:
+                        LOG.exception("Failed to persist attempt timestamp for skipped candidate %s", work_id)
+                    # Remove the selected item from eligible and try again
+                    try:
+                        eligible.remove(selected)
+                    except ValueError:
+                        pass
+                    # If there are other eligible candidates, recurse (simple
+                    # loop by calling poll_and_handoff again would restart
+                    # the whole flow; instead return no_candidates so the
+                    # scheduler cycle can pick up next time).  Keep behavior
+                    # conservative: don't auto-loop here to avoid unexpected
+                    # extra work in the poller.
+                    return PollerResult(outcome=PollerOutcome.no_candidates)
+            except Exception:
+                LOG.exception("Failed to parse wl show output for %s; proceeding to handler", work_id)
+    except Exception:
+        LOG.exception("Failed to execute wl show for %s; proceeding to handler", work_id)
+
+    # Hand off to handler and persist timestamps based on outcome.
     # Record a per-item last_attempt_at for observability regardless of
     # success; update last_audit_at only when the handler indicates
     # success by returning a truthy value.

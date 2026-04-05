@@ -482,7 +482,26 @@ def load_descriptor(
         if local_schema.exists():
             _validate_against_schema(data, local_schema)
         else:
-            _validate_against_schema(data, schema_path)
+            # When no schema is colocated with the descriptor, prefer a
+            # repository-root-relative schema. Derive the repository root by
+            # walking up from the descriptor file (file_path) to find
+            # pyproject.toml.  This fixes a failure mode where the module
+            # location (module __file__) may live in an installed package
+            # path and walking from there resolves to the filesystem root
+            # ("/"), producing an invalid absolute schema path like
+            # "/docs/workflow/workflow-schema.json".  By resolving from the
+            # descriptor file we locate the correct repo root when the
+            # descriptor is project-local (e.g. .worklog/ampa/workflow.yaml).
+            if schema_path is None:
+                candidate = file_path.resolve()
+                while candidate != candidate.parent:
+                    if (candidate / "pyproject.toml").exists():
+                        break
+                    candidate = candidate.parent
+                default_schema = candidate / "docs" / "workflow" / "workflow-schema.json"
+                _validate_against_schema(data, default_schema)
+            else:
+                _validate_against_schema(data, schema_path)
     except Exception:
         # Re-raise so callers get the detailed DescriptorValidationError
         raise
