@@ -75,6 +75,22 @@ def load_env() -> None:
         load_dotenv(project_env, override=True)
         return
 
+    # 1a. User-level XDG config .env (e.g. $XDG_CONFIG_HOME/opencode/.worklog/ampa/.env
+    # or ~/.config/opencode/.worklog/ampa/.env).  This lets operators place
+    # per-user overrides in their XDG config directory which is useful for
+    # developer-specific settings (test channels, tokens) without committing
+    # them into the project.  Keep this after the project-local lookup so a
+    # repository-specific .env continues to take precedence.
+    try:
+        xdg_base = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+        xdg_env = os.path.join(xdg_base, "opencode", ".worklog", "ampa", ".env")
+        if os.path.isfile(xdg_env):
+            load_dotenv(xdg_env, override=True)
+            return
+    except Exception:
+        # Be conservative: any error here should not prevent other fallbacks.
+        LOG.debug("Failed to load XDG config .env (continuing to other lookups)")
+
     # 2. Package-local .env (backward compat for single-project / local installs)
     pkg_env_path = os.path.join(os.path.dirname(__file__), ".env")
     if find_dotenv:
