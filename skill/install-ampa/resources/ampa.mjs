@@ -2554,6 +2554,59 @@ export default function register(ctx) {
     });
 
   ampa
+    .command('restart')
+    .description('Restart the project daemon (stop, wait until stopped, then start)')
+    .option('--cmd <cmd>', 'Command to run (overrides config)')
+    .option('--name <name>', 'Daemon name', 'default')
+    .option('--foreground', 'Run in foreground', false)
+    .option('--verbose', 'Print resolved command and env', false)
+    .action(async (opts) => {
+      let cwd = process.cwd();
+      try { cwd = findProjectRoot(cwd); } catch (e) { console.error(e.message); process.exitCode = 2; return; }
+
+      // Attempt to stop the daemon first
+      await stop(cwd, opts.name);
+
+      // Confirm the daemon has stopped. Poll for a short period.
+      const maxWaitMs = 10000; // 10s
+      const pollIntervalMs = 100;
+      const startTs = Date.now();
+      let sched = getSchedulerDaemonStatus(cwd, opts.name);
+      while (sched.state === 'running' && Date.now() - startTs < maxWaitMs) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, pollIntervalMs));
+        sched = getSchedulerDaemonStatus(cwd, opts.name);
+      }
+      if (sched.state === 'running') {
+        console.error(`Failed to stop daemon within ${Math.round(maxWaitMs/1000)}s; aborting restart.`);
+        process.exitCode = 1;
+        return;
+      }
+
+      // Resolve start command and invoke start
+      const cmdSpec = await resolveCommand(opts.cmd, cwd);
+      if (!cmdSpec) {
+        console.error('No command resolved. Set --cmd, WL_AMPA_CMD or configure worklog.json/package.json/scripts.');
+        process.exitCode = 2;
+        return;
+      }
+      if (opts.verbose) {
+        try {
+          if (cmdSpec && cmdSpec.cmd && Array.isArray(cmdSpec.cmd)) {
+            console.log('Resolved command:', cmdSpec.cmd.join(' '), 'env:', JSON.stringify(cmdSpec.env || {}));
+          } else if (Array.isArray(cmdSpec)) {
+            console.log('Resolved command:', cmdSpec.join(' '));
+          } else {
+            console.log('Resolved command (unknown form):', JSON.stringify(cmdSpec));
+          }
+        } catch (e) {}
+      }
+
+      const code = await start(cwd, cmdSpec, opts.name, opts.foreground);
+      process.exitCode = code;
+    });
+
+  ampa
     .command('status')
     .description('Show daemon status')
     .option('--name <name>', 'Daemon name', 'default')
