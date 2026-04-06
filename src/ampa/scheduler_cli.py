@@ -164,10 +164,9 @@ def _format_command_table(rows: List[Dict[str, Any]]) -> str:
     if not rows:
         return "No commands configured."
 
-    headers = ["id", "name", "description", "last_run", "next_run"]
+    headers = ["id", "name", "last_run", "next_run"]
     formatted: List[List[str]] = []
     for row in rows:
-        description = _truncate_text(str(row.get("description") or ""), 60)
         last_run = row.get("last_run") or "never"
         next_run = row.get("next_run") or "n/a"
         if last_run not in ("never", None):
@@ -182,7 +181,6 @@ def _format_command_table(rows: List[Dict[str, Any]]) -> str:
             [
                 str(row.get("id") or ""),
                 str(row.get("name") or ""),
-                description,
                 str(last_run),
                 str(next_run),
             ]
@@ -203,28 +201,28 @@ def _format_command_table(rows: List[Dict[str, Any]]) -> str:
 
 
 def _format_inactive_command_table(rows: List[Dict[str, Any]]) -> str:
-    """Format a compact table for inactive (idle) commands.
-
-    This omits the `next_run` column as it is not relevant for idle
-    commands per operator guidance.
-    """
+    """Format a table for inactive (idle) commands."""
     if not rows:
         return "No commands configured."
 
-    headers = ["id", "name", "description", "last_run"]
+    headers = ["id", "name", "last_run", "next_run"]
     formatted: List[List[str]] = []
     for row in rows:
-        description = _truncate_text(str(row.get("description") or ""), 60)
         last_run = row.get("last_run") or "never"
+        next_run = row.get("next_run") or "n/a"
         if last_run not in ("never", None):
             parsed = _from_iso(str(last_run))
             if parsed is not None:
                 last_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M")
+        if next_run not in ("n/a", None):
+            parsed = _from_iso(str(next_run))
+            if parsed is not None:
+                next_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M")
         formatted.append([
             str(row.get("id") or ""),
             str(row.get("name") or ""),
-            description,
             str(last_run),
+            str(next_run),
         ])
 
     widths = [len(h) for h in headers]
@@ -258,7 +256,7 @@ def _cli_list(args: argparse.Namespace) -> int:
     else:
         print("No active commands.")
 
-    # Then print inactive commands in a separate compact table (omit next_run)
+    # Then print inactive commands in a separate table
     if inactive:
         print("")
         print("Inactive commands:")
