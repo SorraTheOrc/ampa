@@ -519,14 +519,20 @@ def poll_and_handoff(
                 payload = json.loads(proc.stdout)
                 # Work item may be wrapped under 'workItem' — normalize
                 wi = payload.get("workItem") or payload
-                status_val = (wi.get("status") or "").strip().lower()
+                # Prioritise the work item's stage as the authoritative signal
+                # for audit eligibility. Some backends return inconsistent
+                # (status, stage) pairs (e.g. status=completed with
+                # stage=in_review). Per operational requirements, any item
+                # with stage == "in_review" should be operated on by the
+                # audit process regardless of the status value.
+                stage_val = (wi.get("stage") or "").strip().lower()
                 # Normalize common variants to a canonical form
-                status_norm = status_val.replace("-", "_").replace(" ", "_")
-                if status_norm != "in_progress":
+                stage_norm = stage_val.replace("-", "_").replace(" ", "_")
+                if stage_norm != "in_review":
                     LOG.info(
-                        "Audit poller: skipping candidate %s due to status=%r (expected in_progress)",
+                        "Audit poller: skipping candidate %s due to stage=%r (expected in_review)",
                         work_id,
-                        status_val,
+                        stage_val,
                     )
                     # Record an attempt timestamp so we don't repeatedly
                     # re-select this candidate on the next cycle.
