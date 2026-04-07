@@ -87,15 +87,69 @@ def build_engine(
         ``SchedulerStore`` instance (used by ``StoreDispatchRecorder``).
     """
     try:
-        descriptor_path = os.getenv(
-            "AMPA_WORKFLOW_DESCRIPTOR",
-            os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
-                "docs",
-                "workflow",
-                "workflow.yaml",
-            ),
-        )
+        # Resolve descriptor path with the following precedence:
+        # 1. AMPA_WORKFLOW_DESCRIPTOR env var (explicit override)
+        # 2. project-local: <cwd>/.worklog/ampa/workflow.json
+        # 3. user-level XDG config: ${XDG_CONFIG_HOME:-$HOME/.config}/opencode/.worklog/ampa/workflow.json
+        # 4. module-local docs/workflow/workflow.json (package-provided canonical)
+        env_path = os.getenv("AMPA_WORKFLOW_DESCRIPTOR")
+        if env_path:
+            descriptor_path = env_path
+        else:
+            # Project-local runtime location candidates (json/yaml/yml)
+            try:
+                proj_base = os.path.join(os.getcwd(), ".worklog", "ampa")
+                project_candidates = [
+                    os.path.join(proj_base, "workflow.json"),
+                    os.path.join(proj_base, "workflow.yaml"),
+                    os.path.join(proj_base, "workflow.yml"),
+                ]
+            except Exception:
+                project_candidates = []
+
+            # User XDG config fallback (json/yaml/yml)
+            try:
+                xdg_base = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+                xdg_base = os.path.join(xdg_base, "opencode", ".worklog", "ampa")
+                xdg_candidates = [
+                    os.path.join(xdg_base, "workflow.json"),
+                    os.path.join(xdg_base, "workflow.yaml"),
+                    os.path.join(xdg_base, "workflow.yml"),
+                ]
+            except Exception:
+                xdg_candidates = []
+
+            # Module-local package docs path (fallback)
+            module_root = os.path.dirname(os.path.dirname(__file__))
+            module_docs = os.path.join(module_root, "docs", "workflow")
+            module_candidates = [
+                os.path.join(module_docs, "workflow.json"),
+                os.path.join(module_docs, "workflow.yaml"),
+                os.path.join(module_docs, "workflow.yml"),
+            ]
+
+            # Pick the first existing path in order
+            descriptor_path = None
+            for c in project_candidates:
+                if c and os.path.isfile(c):
+                    descriptor_path = c
+                    break
+            if descriptor_path is None:
+                for c in xdg_candidates:
+                    if c and os.path.isfile(c):
+                        descriptor_path = c
+                        break
+            if descriptor_path is None:
+                # fall back to module candidates (choose json if present)
+                for c in module_candidates:
+                    if c and os.path.isfile(c):
+                        descriptor_path = c
+                        break
+                # If module candidate not present, still return the first
+                # module candidate (so load_descriptor raises FileNotFoundError
+                # with a clear path) rather than None.
+                if descriptor_path is None:
+                    descriptor_path = module_candidates[0]
 
         descriptor = load_descriptor(descriptor_path)
 

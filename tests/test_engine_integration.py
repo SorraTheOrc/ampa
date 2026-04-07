@@ -6,7 +6,7 @@ Covers test plan categories T-ST, T-IE, T-DL, and T-EC from
 in the docstring.
 
 These tests exercise the ``Engine`` orchestrator (``ampa.engine.core``) with
-fully wired-up descriptors matching the canonical ``workflow.yaml`` semantics,
+fully wired-up descriptors matching the canonical ``workflow.json`` semantics,
 using mock infrastructure (fetcher, updater, dispatcher, notifier).
 
 Design constraints from the revised PRD (docs/workflow/engine-prd.md):
@@ -162,7 +162,7 @@ class MockQuerier:
 # Descriptor builder — builds the full canonical workflow state machine
 # ---------------------------------------------------------------------------
 
-# Full state map matching workflow.yaml
+# Full state map matching workflow.json
 STATES = {
     "idea": StateTuple(status="open", stage="idea"),
     "intake": StateTuple(status="open", stage="intake_complete"),
@@ -172,7 +172,7 @@ STATES = {
     "review": StateTuple(status="in_progress", stage="in_review"),
     "shipped": StateTuple(status="closed", stage="done"),
     "delegated": StateTuple(status="in-progress", stage="in_progress"),
-    "audit_passed": StateTuple(status="completed", stage="audit_passed"),
+    "audit_passed": StateTuple(status="completed", stage="done"),
     "audit_failed": StateTuple(status="in_progress", stage="audit_failed"),
     "escalated": StateTuple(status="blocked", stage="escalated"),
     "blocked_in_progress": StateTuple(status="blocked", stage="in_progress"),
@@ -187,13 +187,12 @@ STAGES = (
     "plan_complete",
     "in_progress",
     "in_review",
-    "audit_passed",
     "audit_failed",
     "escalated",
     "done",
 )
 
-# Full invariant set matching workflow.yaml
+# Full invariant set matching workflow.json
 INVARIANTS = (
     Invariant(
         name="requires_prd_link",
@@ -272,7 +271,7 @@ ROLES = (
     Role(name="TechnicalWriter", description="Docs", type="either"),
 )
 
-# Full command set matching workflow.yaml
+# Full command set matching workflow.json
 COMMANDS = {
     "intake": Command(
         name="intake",
@@ -452,7 +451,7 @@ def _make_descriptor(
     invariants: tuple[Invariant, ...] | None = None,
     states: dict[str, StateTuple] | None = None,
 ) -> WorkflowDescriptor:
-    """Build a full workflow descriptor matching workflow.yaml semantics."""
+    """Build a full workflow descriptor matching workflow.json semantics."""
     return WorkflowDescriptor(
         version="1.0.0",
         metadata=Metadata(
@@ -763,7 +762,7 @@ class TestStateTransitions:
         """T-ST-06: Invalid transition — delegate from idea state.
 
         The delegate command includes 'idea' in its from_states, so
-        delegation from idea IS valid per workflow.yaml. This test verifies
+        delegation from idea IS valid per workflow.json. This test verifies
         that delegating from a state NOT in from_states (e.g. 'shipped')
         is rejected by the engine.
         """
@@ -922,7 +921,7 @@ class TestInvariantEnforcement:
         # Work item with no audit comments
         wi = _make_work_item_data(
             status="completed",
-            stage="audit_passed",
+            stage="done",
             comments=[],
         )
 
@@ -1284,7 +1283,7 @@ class TestEdgeCases:
         """T-EC-04: Escalation directly from delegated state.
 
         Scenario: escalate executed from delegated (emergency path).
-        Expected: Allowed — delegated is in escalate.from[] per workflow.yaml.
+        Expected: Allowed — delegated is in escalate.from[] per workflow.json.
         """
         desc = _make_descriptor()
 

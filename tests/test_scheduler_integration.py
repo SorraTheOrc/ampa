@@ -525,10 +525,10 @@ class TestBuildEngine:
             os.path.dirname(os.path.dirname(__file__)),
             "docs",
             "workflow",
-            "workflow.yaml",
+            "workflow.json",
         )
         if not os.path.isfile(descriptor_path):
-            pytest.skip("workflow.yaml not found")
+            pytest.skip("workflow.json not found")
 
         scheduler = _make_scheduler(engine=None)
 
@@ -576,10 +576,10 @@ class TestSchedulerEngineInit:
             os.path.dirname(os.path.dirname(__file__)),
             "docs",
             "workflow",
-            "workflow.yaml",
+            "workflow.json",
         )
         if not os.path.isfile(descriptor_path):
-            pytest.skip("workflow.yaml not found")
+            pytest.skip("workflow.json not found")
 
         with mock.patch.dict(
             "os.environ", {"AMPA_WORKFLOW_DESCRIPTOR": descriptor_path}

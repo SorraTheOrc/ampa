@@ -1,5 +1,5 @@
 // This file is a copy of docs/workflow/workflow-schema.json from the repo.
-// It is placed into the installer resources so the packaged workflow.yaml can
+// It is placed into the installer resources so the packaged workflow.json can
 // validate against the schema when the installed daemon starts inside the
 // project's config location.
 {

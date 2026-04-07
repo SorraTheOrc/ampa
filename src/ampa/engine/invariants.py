@@ -3,7 +3,7 @@
 Evaluates invariant logic expressions against work item data to enforce
 preconditions and postconditions for workflow commands.
 
-Supported expression patterns (from workflow.yaml)::
+Supported expression patterns (from workflow.json)::
 
     length(description) > N          — string length check
     regex(field, "pattern")          — regex match against a field

@@ -642,6 +642,65 @@ class AMPABot:
                         continue
                     embeds_out = _build_embeds(raw_embeds)
 
+                # Optional attachments support: a list of {filename, content}
+                # where content is a UTF-8 string. Attachments are converted to
+                # discord.File objects and forwarded to channel.send(files=...).
+                raw_attachments = data.get("attachments")
+                files: Optional[list] = None
+                attachments_to_remove: list = []
+                if raw_attachments:
+                    if not isinstance(raw_attachments, list):
+                        response = {"ok": False, "error": "attachments must be a list"}
+                        writer.write(json.dumps(response).encode() + b"\n")
+                        await writer.drain()
+                        continue
+                    files_list: list = []
+                    try:
+                        import io as _io
+                        import discord as _discord  # type: ignore
+                        import os as _os
+
+                        for idx, att in enumerate(raw_attachments):
+                            if not isinstance(att, dict):
+                                raise ValueError(f"attachments[{idx}] must be an object")
+
+                            # Allow either an inline `content` or a filesystem `path`.
+                            filename = att.get("filename")
+                            path = att.get("path")
+                            content = att.get("content")
+
+                            if path:
+                                # Use provided path; ensure it exists
+                                if not isinstance(path, str) or not _os.path.exists(path):
+                                    raise ValueError(f"attachments[{idx}].path does not exist: {path}")
+                                # Derive filename if missing
+                                if not filename:
+                                    filename = _os.path.basename(path)
+                                file_obj = _discord.File(path, filename=filename)
+                                files_list.append(file_obj)
+                                if att.get("_remove_after_send"):
+                                    attachments_to_remove.append(path)
+                            else:
+                                # Inline content path — must provide content and filename
+                                if content is None:
+                                    raise ValueError(f"attachments[{idx}] missing filename or content")
+                                if not filename:
+                                    raise ValueError(f"attachments[{idx}] missing filename")
+                                if isinstance(content, str):
+                                    bio = _io.BytesIO(content.encode("utf-8"))
+                                elif isinstance(content, (bytes, bytearray)):
+                                    bio = _io.BytesIO(bytes(content))
+                                else:
+                                    raise ValueError(f"attachments[{idx}].content must be string or bytes")
+                                file_obj = _discord.File(bio, filename=filename)
+                                files_list.append(file_obj)
+                    except Exception as exc:
+                        response = {"ok": False, "error": f"invalid attachments: {exc}"}
+                        writer.write(json.dumps(response).encode() + b"\n")
+                        await writer.drain()
+                        continue
+                    files = files_list
+
                 # Discord messages are limited to 2000 characters.
                 if content and len(content) > 2000:
                     content = content[:1997] + "..."
@@ -652,9 +711,23 @@ class AMPABot:
                 orig_channel = self._channel
                 try:
                     self._channel = target_channel
-                    ok = await self._send_to_discord(content, view=view, embeds=embeds_out)
+                    ok = await self._send_to_discord(
+                        content, view=view, embeds=embeds_out, files=files
+                    )
                 finally:
                     self._channel = orig_channel
+                    # Clean up any temporary files written by notifications.notify
+                    try:
+                        import os as _os
+
+                        for p in attachments_to_remove:
+                            try:
+                                if _os.path.exists(p):
+                                    _os.unlink(p)
+                            except Exception:
+                                LOG.debug("Failed to remove temporary attachment %s", p)
+                    except Exception:
+                        LOG.debug("Error during attachment cleanup")
                 response: Dict[str, Any] = {"ok": ok}
                 if not ok:
                     response["error"] = "failed to send to Discord"
@@ -672,7 +745,12 @@ class AMPABot:
                 pass
 
     async def _send_to_discord(
-        self, content: str, *, view: Optional[Any] = None, embeds: Optional[List[Any]] = None
+        self,
+        content: str,
+        *,
+        view: Optional[Any] = None,
+        embeds: Optional[List[Any]] = None,
+        files: Optional[List[Any]] = None,
     ) -> bool:
         """Send a text message to the configured Discord channel.
 
@@ -703,6 +781,10 @@ class AMPABot:
                 kwargs["view"] = view
             if embeds is not None:
                 kwargs["embeds"] = embeds
+            # Support optional files argument (list of discord.File)
+            if files is not None:
+                kwargs["files"] = files
+
             await self._channel.send(**kwargs)
             LOG.debug(
                 "Sent message to #%s (%d chars, embeds=%s, components=%s)",

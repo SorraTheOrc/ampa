@@ -373,6 +373,71 @@ def notify(
     # Log the exact payload we're about to send so operators can audit what
     # the scheduler is instructing the bot to post. This helps diagnose
     # misrouting when messages unexpectedly appear in the test channel.
+    # If the payload includes attachments with inline content, write those
+    # attachments to a project-local attachments directory and replace the
+    # inline content with a filesystem path so the bot can stream the file
+    # to Discord without requiring large JSON messages over the Unix socket.
+    try:
+        attachments = msg.get("attachments")
+        if isinstance(attachments, list) and attachments:
+            attach_dir = os.path.join(os.getcwd(), ".worklog", "ampa", "attachments")
+            try:
+                os.makedirs(attach_dir, exist_ok=True)
+            except Exception:
+                # Best-effort – if we cannot create the directory we'll fall
+                # back to sending inline content (which may fail for large
+                # payloads, but that's preferable to crashing).
+                LOG.debug("notify: could not create attachments dir %s", attach_dir)
+
+            for idx, att in enumerate(list(attachments)):
+                try:
+                    if not isinstance(att, dict):
+                        LOG.debug("notify: skipping invalid attachment entry at index %d", idx)
+                        continue
+                    # If caller already provided a path, leave it alone.
+                    if att.get("path"):
+                        continue
+                    content = att.get("content")
+                    if content is None:
+                        continue
+                    # Determine a safe filename
+                    filename = att.get("filename") or f"attachment-{idx}"
+                    safe_name = os.path.basename(str(filename))
+                    # Avoid collisions — append a short suffix when needed
+                    base_path = os.path.join(attach_dir, safe_name)
+                    path = base_path
+                    if os.path.exists(path):
+                        import uuid
+
+                        path = f"{base_path}-{uuid.uuid4().hex}"
+
+                    # Write content to disk
+                    if isinstance(content, str):
+                        try:
+                            with open(path, "w", encoding="utf-8") as fh:
+                                fh.write(content)
+                        except Exception:
+                            # Try binary as a fallback
+                            with open(path, "wb") as fh:
+                                fh.write(content.encode("utf-8", errors="replace"))
+                    elif isinstance(content, (bytes, bytearray)):
+                        with open(path, "wb") as fh:
+                            fh.write(bytes(content))
+                    else:
+                        # Fallback: stringify
+                        with open(path, "w", encoding="utf-8") as fh:
+                            fh.write(str(content))
+
+                    # Replace inline content with a path and mark for removal
+                    att["path"] = path
+                    att.pop("content", None)
+                    att["_remove_after_send"] = True
+                except Exception:
+                    LOG.exception("notify: failed to write attachment at index %d", idx)
+
+    except Exception:
+        LOG.exception("notify: unexpected error while preparing attachments")
+
     try:
         # Diagnostic payload logging should be at DEBUG in normal runs so
         # message content isn't emitted to default INFO logs.  Use DEBUG to

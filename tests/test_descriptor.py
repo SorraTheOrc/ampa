@@ -32,7 +32,6 @@ from ampa.engine.descriptor import (
 # ---------------------------------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-WORKFLOW_YAML = REPO_ROOT / "docs" / "workflow" / "workflow.yaml"
 WORKFLOW_JSON = REPO_ROOT / "docs" / "workflow" / "workflow.json"
 SCHEMA_JSON = REPO_ROOT / "docs" / "workflow" / "workflow-schema.json"
 
@@ -92,16 +91,16 @@ def _write_json(path: Path, data: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test: Load real workflow.yaml
+# Test: Load real workflow.json
 # ---------------------------------------------------------------------------
 
 
 class TestLoadRealWorkflow:
-    """Load the actual ``docs/workflow/workflow.yaml`` and verify key properties."""
+    """Load the actual ``docs/workflow/workflow.json`` and verify key properties."""
 
     @pytest.fixture(scope="class")
     def descriptor(self) -> WorkflowDescriptor:
-        return load_descriptor(WORKFLOW_YAML, schema_path=SCHEMA_JSON)
+        return load_descriptor(WORKFLOW_JSON, schema_path=SCHEMA_JSON)
 
     def test_version(self, descriptor: WorkflowDescriptor) -> None:
         assert descriptor.version == "1.0.0"
@@ -121,7 +120,9 @@ class TestLoadRealWorkflow:
     def test_stages(self, descriptor: WorkflowDescriptor) -> None:
         assert "idea" in descriptor.stages
         assert "done" in descriptor.stages
-        assert len(descriptor.stages) == 11  # includes delegated stage
+        # We removed "audit_passed" as a runtime stage and canonicalised
+        # its mapping to the "done" stage; expect 10 stages now.
+        assert len(descriptor.stages) == 10  # includes delegated stage
 
     def test_state_aliases(self, descriptor: WorkflowDescriptor) -> None:
         assert "idea" in descriptor.states

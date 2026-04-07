@@ -1289,33 +1289,66 @@ main() {
     # Ensure scheduler store exists in the project runtime location.
     ensure_project_scheduler_store
 
-    # If this was a global installation, publish the canonical workflow
-    # descriptor into the global ampa config directory so that daemons started
-    # in arbitrary projects can discover the descriptor via
-    # AMPA_WORKFLOW_DESCRIPTOR (ampa.mjs will prefer project-local and then
-    # global .worklog/ampa/workflow.yaml).
-    if [ "$LOCAL_INSTALL" -eq 0 ] && [ "$TARGET_DIR" = "$GLOBAL_PLUGINS_DIR" ]; then
-      # global ampa config dir (match ampa.mjs globalAmpaDir())
+    # Publish canonical workflow descriptor into runtime config locations
+    # so daemons started in arbitrary projects can discover it. Publish to
+    # (in order of operator visibility):
+    #  - project-local: <projectRoot>/.worklog/ampa/workflow.json
+    #  - user-level XDG config: ${XDG_CONFIG_HOME:-$HOME/.config}/opencode/.worklog/ampa/workflow.json
+    #  - global installer-published location (legacy)
+    # We attempt to copy the descriptor from the installed package then fall
+    # back to the bundled resource inside the installer.
+
+    # Canonical workflow descriptor source: docs/workflow/workflow.json at the repo root
+    REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd || true)"
+    repo_workflow_json="$REPO_ROOT/docs/workflow/workflow.json"
+
+    # Publication target depends on install mode:
+    # - Local install (TARGET_DIR == ".worklog/plugins" or --local): publish to project .worklog/ampa/workflow.json (if not already present)
+    # - Global install: publish to user XDG config ${XDG_CONFIG_HOME:-$HOME/.config}/opencode/.worklog/ampa/workflow.json (if not already present)
+    if [ "$TARGET_DIR" = ".worklog/plugins" ] || [ "$LOCAL_INSTALL" -eq 1 ]; then
+      project_ampa_dir=".worklog/ampa"
+      mkdir -p "$project_ampa_dir"
+      project_dest="$project_ampa_dir/workflow.json"
+
+      if [ -f "$project_dest" ]; then
+        log_info "Project workflow descriptor already exists at $project_dest; skipping publish"
+        log_decision "PUBLISHED_WORKFLOW_PROJECT=exists"
+      else
+        if [ -f "$repo_workflow_json" ]; then
+          if cp -p "$repo_workflow_json" "$project_dest" 2>/dev/null || cp "$repo_workflow_json" "$project_dest" 2>/dev/null; then
+            log_info "Published canonical workflow descriptor to $project_dest"
+            log_decision "PUBLISHED_WORKFLOW_PROJECT=$project_dest"
+          else
+            log_error "Failed to publish canonical workflow descriptor to $project_dest"
+            log_decision "PUBLISHED_WORKFLOW_PROJECT=failed"
+          fi
+        else
+          log_info "Canonical workflow descriptor not found at docs/workflow/workflow.json; skipping project publish"
+          log_decision "PUBLISHED_WORKFLOW_PROJECT=skipped"
+        fi
+      fi
+    else
       xdg_base="${XDG_CONFIG_HOME:-$HOME/.config}"
       global_ampa_dir="$xdg_base/opencode/.worklog/ampa"
       mkdir -p "$global_ampa_dir"
+      global_dest="$global_ampa_dir/workflow.json"
 
-      # Candidate workflow locations inside the just-installed package
-      plugin_workflow="$TARGET_DIR/ampa_py/ampa/docs/workflow/workflow.yaml"
-      bundled_workflow="$SCRIPT_DIR/../resources/ampa_py/ampa/docs/workflow/workflow.yaml"
-
-      if [ -f "$plugin_workflow" ]; then
-        if cp -p "$plugin_workflow" "$global_ampa_dir/workflow.yaml" 2>/dev/null || cp "$plugin_workflow" "$global_ampa_dir/workflow.yaml" 2>/dev/null; then
-          log_info "Published workflow descriptor to $global_ampa_dir/workflow.yaml"
-          log_decision "PUBLISHED_WORKFLOW=$global_ampa_dir/workflow.yaml"
-        fi
-      elif [ -f "$bundled_workflow" ]; then
-        if cp -p "$bundled_workflow" "$global_ampa_dir/workflow.yaml" 2>/dev/null || cp "$bundled_workflow" "$global_ampa_dir/workflow.yaml" 2>/dev/null; then
-          log_info "Published workflow descriptor (from bundled resources) to $global_ampa_dir/workflow.yaml"
-          log_decision "PUBLISHED_WORKFLOW_BUNDLED=$global_ampa_dir/workflow.yaml"
-        fi
+      if [ -f "$global_dest" ]; then
+        log_info "User XDG workflow descriptor already exists at $global_dest; skipping publish"
+        log_decision "PUBLISHED_WORKFLOW_XDG=exists"
       else
-        log_decision "PUBLISHED_WORKFLOW=skipped_missing_descriptor"
+        if [ -f "$repo_workflow_json" ]; then
+          if cp -p "$repo_workflow_json" "$global_dest" 2>/dev/null || cp "$repo_workflow_json" "$global_dest" 2>/dev/null; then
+            log_info "Published canonical workflow descriptor to $global_dest"
+            log_decision "PUBLISHED_WORKFLOW_XDG=$global_dest"
+          else
+            log_error "Failed to publish canonical workflow descriptor to $global_dest"
+            log_decision "PUBLISHED_WORKFLOW_XDG=failed"
+          fi
+        else
+          log_info "Canonical workflow descriptor not found at docs/workflow/workflow.json; skipping XDG publish"
+          log_decision "PUBLISHED_WORKFLOW_XDG=skipped"
+        fi
       fi
     fi
 

@@ -34,7 +34,7 @@ from ampa.engine.descriptor import StateTuple, load_descriptor
 # ---------------------------------------------------------------------------
 
 WORKFLOW_PATH = (
-    Path(__file__).resolve().parent.parent / "docs" / "workflow" / "workflow.yaml"
+    Path(__file__).resolve().parent.parent / "docs" / "workflow" / "workflow.json"
 )
 
 
@@ -494,7 +494,7 @@ class TestCandidateResult:
 
 
 class TestRealWorkflowIntegration:
-    """Tests using the actual workflow.yaml descriptor."""
+    """Tests using the actual workflow.json descriptor."""
 
     def test_full_selection_happy_path(self, descriptor):
         """A plan_complete candidate should be selected."""

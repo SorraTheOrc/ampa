@@ -96,28 +96,28 @@ function resolveAmpaPackage(projectRoot) {
 
 /**
  * Determine the best workflow descriptor path to provide to the Python daemon.
- * Resolution order:
- *  - <projectRoot>/.worklog/ampa/workflow.yaml (per-project override)
- *  - <packageDir>/ampa/docs/workflow/workflow.yaml (package-provided)
- *  - <globalOpenCodeDir>/.worklog/ampa/workflow.yaml (global published copy)
+ * Resolution order (canonical JSON only):
+ *  - <projectRoot>/.worklog/ampa/workflow.json (per-project override)
+ *  - <packageDir>/ampa/docs/workflow/workflow.json (package-provided)
+ *  - <globalOpenCodeDir>/.worklog/ampa/workflow.json (global published copy)
  */
 function discoverWorkflowDescriptor(projectRoot, pyPath) {
-  const projectWorkflow = path.join(projectRoot, '.worklog', 'ampa', 'workflow.yaml');
-  if (fs.existsSync(projectWorkflow)) return projectWorkflow;
+  const projectJson = path.join(projectRoot, '.worklog', 'ampa', 'workflow.json');
+  if (fs.existsSync(projectJson)) return projectJson;
 
   // Prefer a global published workflow (from installer) over the package
   // provided descriptor because package descriptors may use repository-root
   // relative schema paths which are not available when installed under
   // XDG_CONFIG_HOME. The global published copy is self-contained.
-  const globalWorkflow = path.join(globalAmpaDir(), 'workflow.yaml');
+  const globalJson = path.join(globalAmpaDir(), 'workflow.json');
   try {
-    if (fs.existsSync(globalWorkflow)) return globalWorkflow;
+    if (fs.existsSync(globalJson)) return globalJson;
   } catch (e) {}
 
   try {
     if (pyPath) {
-      const pkgWorkflow = path.join(pyPath, 'ampa', 'docs', 'workflow', 'workflow.yaml');
-      if (fs.existsSync(pkgWorkflow)) return pkgWorkflow;
+      const pkgJson = path.join(pyPath, 'ampa', 'docs', 'workflow', 'workflow.json');
+      if (fs.existsSync(pkgJson)) return pkgJson;
     }
   } catch (e) {}
   return null;

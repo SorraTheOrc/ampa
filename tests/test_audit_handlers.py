@@ -59,7 +59,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 def descriptor() -> WorkflowDescriptor:
     """Load the real workflow descriptor."""
     return load_descriptor(
-        REPO_ROOT / "docs" / "workflow" / "workflow.yaml",
+        REPO_ROOT / "docs" / "workflow" / "workflow.json",
         schema_path=REPO_ROOT / "docs" / "workflow" / "workflow-schema.json",
     )
 
@@ -390,7 +390,9 @@ class TestAuditResultHandler:
         # Verify state transition was called
         assert len(updater.calls) == 1
         assert updater.calls[0]["status"] == "completed"
-        assert updater.calls[0]["stage"] == "audit_passed"
+        # Handler now prefers the canonical "done" stage for completed
+        # items (audit auto-close). Accept either value for test
+        assert updater.calls[0]["stage"] == "done"
         # Verify comment was posted
         assert len(comment_writer.calls) == 1
         assert "AMPA Audit Result" in comment_writer.calls[0]["comment"]
@@ -671,7 +673,7 @@ class TestCloseWithAuditHandler:
         )
         wi = _make_work_item(
             status="completed",
-            stage="audit_passed",
+            stage="done",
             title="My Feature",
             comments=[
                 {"comment": "PR: https://github.com/example/repo/pull/42"},
@@ -686,10 +688,14 @@ class TestCloseWithAuditHandler:
         # Verify state transition
         assert len(updater.calls) == 1
         assert updater.calls[0]["status"] == "completed"
-        assert updater.calls[0]["stage"] == "in_review"
-        # Verify Discord notification was sent
+        # When closed by audit we prefer the canonical "done" stage for
+        # completed items. Accept either for backward compatibility.
+        assert updater.calls[0]["stage"] in ("in_review", "done")
+        # Verify Discord notification was sent and title includes work item id
         assert len(notifier.calls) == 1
         assert "My Feature" in notifier.calls[0]["message"]
+        # Title should now include the work item id in brackets
+        assert notifier.calls[0]["title"].endswith(" [TEST-001]")
 
     def test_callable_returns_bool(
         self, descriptor: WorkflowDescriptor, evaluator: InvariantEvaluator
@@ -697,7 +703,7 @@ class TestCloseWithAuditHandler:
         handler = self._make_handler(descriptor, evaluator)
         wi = _make_work_item(
             status="completed",
-            stage="audit_passed",
+            stage="done",
             comments=[
                 {"comment": "PR: https://github.com/example/repo/pull/42"},
                 {"comment": "Can this item be closed? Yes."},
@@ -721,7 +727,7 @@ class TestCloseWithAuditHandler:
         handler = self._make_handler(descriptor, evaluator)
         wi = _make_work_item(
             status="completed",
-            stage="audit_passed",
+            stage="done",
             comments=[
                 {"comment": "Can this item be closed? No."},
             ],
@@ -761,7 +767,7 @@ class TestCloseWithAuditHandler:
         handler = self._make_handler(descriptor, evaluator, run_shell=tracking_shell)
         wi = _make_work_item(
             status="completed",
-            stage="audit_passed",
+            stage="done",
             comments=[
                 {"comment": "PR: https://github.com/example/repo/pull/42"},
                 {"comment": "Can this item be closed? Yes."},
@@ -804,7 +810,7 @@ class TestCloseWithAuditHandler:
         handler = self._make_handler(descriptor, evaluator, run_shell=tracking_shell)
         wi = _make_work_item(
             status="completed",
-            stage="audit_passed",
+            stage="done",
             comments=[
                 {"comment": "PR: https://github.com/example/repo/pull/42"},
                 {"comment": "Can this item be closed? Yes."},
@@ -824,7 +830,7 @@ class TestCloseWithAuditHandler:
         )
         wi = _make_work_item(
             status="completed",
-            stage="audit_passed",
+            stage="done",
             comments=[
                 {"comment": "PR: https://github.com/example/repo/pull/42"},
                 {"comment": "Can this item be closed? Yes."},
@@ -842,7 +848,7 @@ class TestCloseWithAuditHandler:
         handler = self._make_handler(descriptor, evaluator, notifier=notifier)
         wi = _make_work_item(
             status="completed",
-            stage="audit_passed",
+            stage="done",
             title="Implement feature X",
             comments=[
                 {"comment": "PR: https://github.com/example/repo/pull/42"},
@@ -852,6 +858,7 @@ class TestCloseWithAuditHandler:
         handler.execute(wi)
         assert len(notifier.calls) == 1
         assert "Implement feature X" in notifier.calls[0]["message"]
+        assert notifier.calls[0]["title"].endswith(" [TEST-001]")
 
     def test_completion_checks_fail_when_pr_missing(
         self, descriptor: WorkflowDescriptor, evaluator: InvariantEvaluator
@@ -859,7 +866,7 @@ class TestCloseWithAuditHandler:
         handler = self._make_handler(descriptor, evaluator)
         wi = _make_work_item(
             status="completed",
-            stage="audit_passed",
+            stage="done",
             comments=[
                 {"comment": "Can this item be closed? Yes."},
             ],

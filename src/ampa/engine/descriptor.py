@@ -7,7 +7,7 @@ Usage::
 
     from ampa.engine.descriptor import load_descriptor
 
-    descriptor = load_descriptor("docs/workflow/workflow.yaml")
+    descriptor = load_descriptor("docs/workflow/workflow.json")
     cmd = descriptor.get_command("delegate")
     state = descriptor.resolve_alias("idea")
 """
@@ -491,7 +491,7 @@ def load_descriptor(
             # ("/"), producing an invalid absolute schema path like
             # "/docs/workflow/workflow-schema.json".  By resolving from the
             # descriptor file we locate the correct repo root when the
-            # descriptor is project-local (e.g. .worklog/ampa/workflow.yaml).
+            # descriptor is project-local (e.g. .worklog/ampa/workflow.json).
             if schema_path is None:
                 candidate = file_path.resolve()
                 while candidate != candidate.parent:
