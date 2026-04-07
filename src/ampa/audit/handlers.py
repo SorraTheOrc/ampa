@@ -156,17 +156,46 @@ def _check_from_state(
     """
     cmd = descriptor.get_command(command_name)
     valid_states = [descriptor.resolve_state_ref(ref) for ref in cmd.from_states]
-    if current_state not in valid_states:
-        expected = ", ".join(f"({s.status}, {s.stage})" for s in valid_states)
-        return HandlerResult(
-            success=False,
-            reason="invalid_from_state",
-            command=command_name,
-            details=(
-                f"Work item is in ({current_state.status}, {current_state.stage}), "
-                f"expected one of: {expected}"
-            ),
-        )
+    # Exact match is valid
+    if current_state in valid_states:
+        return None
+
+    # Accept a stage-only match as valid. In practice some backends or
+    # workflows produce inconsistent (status, stage) pairs (for example
+    # status=completed with stage=in_review). The audit flow treats the
+    # stage as the authoritative signal for eligibility, so if the current
+    # state's stage matches any expected state's stage we consider it
+    # acceptable and proceed. This avoids noisy "invalid_from_state"
+    # failures when only the status differs.
+    # Normalize stage tokens to be tolerant of common variants produced
+    # by different backends or user input (e.g. "in-review", "in review").
+    # Compare using a canonical form where hyphens and spaces are replaced
+    # with underscores and the value is lowercased/stripped.
+    cur_stage = (current_state.stage or "").strip().lower()
+    cur_stage = cur_stage.replace("-", "_").replace(" ", "_")
+    if cur_stage:
+        for s in valid_states:
+            s_stage = (s.stage or "").strip().lower()
+            s_stage = s_stage.replace("-", "_").replace(" ", "_")
+            if s_stage and s_stage == cur_stage:
+                LOG.info(
+                    "_check_from_state: allowing %s because stage matches (current=%r, expected_stage=%r)",
+                    command_name,
+                    current_state.stage,
+                    s.stage,
+                )
+                return None
+
+    expected = ", ".join(f"({s.status}, {s.stage})" for s in valid_states)
+    return HandlerResult(
+        success=False,
+        reason="invalid_from_state",
+        command=command_name,
+        details=(
+            f"Work item is in ({current_state.status}, {current_state.stage}), "
+            f"expected one of: {expected}"
+        ),
+    )
     return None
 
 
@@ -443,23 +472,31 @@ class AuditResultHandler:
 
         # Step 6: If audit does not recommend closure, do not transition here.
         # The caller can route to the audit_fail command while item is still in
-        # review state.
+        # review state. Include the formatted audit comment text in the
+        # HandlerResult.details so callers (e.g. scheduler) can surface the
+        # full report in notifications (Discord) or logs.
         if not audit_result.recommends_closure:
             return HandlerResult(
                 success=True,
                 reason="audit_recommends_no_closure",
                 command="audit_result",
                 work_item_id=work_item_id,
-                details="Audit completed but does not recommend closure",
+                details=comment_text,
             )
 
         # Step 7: Apply state transition to audit_passed
+        # The descriptor now maps audit_passed -> {status: completed, stage: done}
+        # so use the descriptor-resolved state directly and do not perform a
+        # runtime fallback. This keeps the behaviour deterministic and relies
+        # on the canonical descriptor mapping.
         to_state = self._descriptor.resolve_state_ref(cmd.to)
+
         update_ok = self._updater.update(
             work_item_id,
             status=to_state.status,
             stage=to_state.stage,
         )
+
         if not update_ok:
             return HandlerResult(
                 success=False,
@@ -775,7 +812,12 @@ class CloseWithAuditHandler:
             )
 
         # Step 3: Apply state transition
+        # Use the descriptor-provided target state. The descriptor maps
+        # close_with_audit -> { status: completed, stage: in_review }, but
+        # the canonical handling for completed items should be governed by
+        # the descriptor. Keep update semantics simple and deterministic.
         to_state = self._descriptor.resolve_state_ref(cmd.to)
+
         update_ok = self._updater.update(
             work_item_id,
             status=to_state.status,
@@ -825,15 +867,20 @@ class CloseWithAuditHandler:
         if cmd.effects and cmd.effects.notifications:
             title = _get_work_item_title(work_item)
             for notif in cmd.effects.notifications:
-                if notif.channel == "discord":
-                    msg = notif.message.replace("${title}", title)
-                    try:
-                        self._notifier.send(msg, title=msg, level="info")
-                    except Exception:
-                        LOG.exception(
-                            "Failed to send Discord notification for %s",
-                            work_item_id,
-                        )
+                    if notif.channel == "discord":
+                        # Ensure notification title includes work item id in
+                        # brackets for traceability in Discord channels.
+                        msg = notif.message.replace("${title}", title)
+                        title_with_id = f"{title} [{work_item_id}]"
+                        try:
+                            # Use a concise title (title_with_id) and keep the
+                            # message body as the rendered notification text.
+                            self._notifier.send(msg, title=title_with_id, level="info")
+                        except Exception:
+                            LOG.exception(
+                                "Failed to send Discord notification for %s",
+                                work_item_id,
+                            )
 
         LOG.info("close_with_audit succeeded for %s", work_item_id)
 
