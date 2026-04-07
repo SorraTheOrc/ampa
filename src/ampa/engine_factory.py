@@ -96,32 +96,60 @@ def build_engine(
         if env_path:
             descriptor_path = env_path
         else:
-            # Project-local runtime location (cwd/.worklog/ampa/workflow.json)
+            # Project-local runtime location candidates (json/yaml/yml)
             try:
-                project_candidate = os.path.join(os.getcwd(), ".worklog", "ampa", "workflow.json")
+                proj_base = os.path.join(os.getcwd(), ".worklog", "ampa")
+                project_candidates = [
+                    os.path.join(proj_base, "workflow.json"),
+                    os.path.join(proj_base, "workflow.yaml"),
+                    os.path.join(proj_base, "workflow.yml"),
+                ]
             except Exception:
-                project_candidate = None
+                project_candidates = []
 
-            # User XDG config fallback
+            # User XDG config fallback (json/yaml/yml)
             try:
                 xdg_base = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-                xdg_candidate = os.path.join(xdg_base, "opencode", ".worklog", "ampa", "workflow.json")
+                xdg_base = os.path.join(xdg_base, "opencode", ".worklog", "ampa")
+                xdg_candidates = [
+                    os.path.join(xdg_base, "workflow.json"),
+                    os.path.join(xdg_base, "workflow.yaml"),
+                    os.path.join(xdg_base, "workflow.yml"),
+                ]
             except Exception:
-                xdg_candidate = None
+                xdg_candidates = []
 
             # Module-local package docs path (fallback)
             module_root = os.path.dirname(os.path.dirname(__file__))
             module_docs = os.path.join(module_root, "docs", "workflow")
-            module_candidate = os.path.join(module_docs, "workflow.json")
+            module_candidates = [
+                os.path.join(module_docs, "workflow.json"),
+                os.path.join(module_docs, "workflow.yaml"),
+                os.path.join(module_docs, "workflow.yml"),
+            ]
 
             # Pick the first existing path in order
             descriptor_path = None
-            if project_candidate and os.path.isfile(project_candidate):
-                descriptor_path = project_candidate
-            elif xdg_candidate and os.path.isfile(xdg_candidate):
-                descriptor_path = xdg_candidate
-            else:
-                descriptor_path = module_candidate
+            for c in project_candidates:
+                if c and os.path.isfile(c):
+                    descriptor_path = c
+                    break
+            if descriptor_path is None:
+                for c in xdg_candidates:
+                    if c and os.path.isfile(c):
+                        descriptor_path = c
+                        break
+            if descriptor_path is None:
+                # fall back to module candidates (choose json if present)
+                for c in module_candidates:
+                    if c and os.path.isfile(c):
+                        descriptor_path = c
+                        break
+                # If module candidate not present, still return the first
+                # module candidate (so load_descriptor raises FileNotFoundError
+                # with a clear path) rather than None.
+                if descriptor_path is None:
+                    descriptor_path = module_candidates[0]
 
         descriptor = load_descriptor(descriptor_path)
 

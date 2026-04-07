@@ -488,17 +488,17 @@ class TestInvariantResult:
 
 
 class TestRealWorkflowInvariants:
-    """Test using the actual invariant definitions from workflow.yaml."""
+    """Test using the actual invariant definitions from workflow.json."""
 
     @pytest.fixture
     def evaluator(self) -> InvariantEvaluator:
-        """Build evaluator with workflow.yaml invariants."""
+        """Build evaluator with workflow.json invariants."""
         from ampa.engine.descriptor import load_descriptor
         from pathlib import Path
 
         repo = Path(__file__).resolve().parent.parent
         desc = load_descriptor(
-            repo / "docs" / "workflow" / "workflow.yaml",
+            repo / "docs" / "workflow" / "workflow.json",
             schema_path=repo / "docs" / "workflow" / "workflow-schema.json",
         )
         return InvariantEvaluator(desc.invariants, querier=MockQuerier(0))
@@ -597,7 +597,7 @@ class TestRealWorkflowInvariants:
 
 
 class TestAuditInvariants:
-    """Verify audit-specific invariants from workflow.yaml evaluate correctly.
+    """Verify audit-specific invariants from workflow.json evaluate correctly.
 
     Invariants tested:
     - requires_audit_result: regex(comments, "(?i)AMPA Audit Result")
@@ -612,7 +612,7 @@ class TestAuditInvariants:
 
         repo = Path(__file__).resolve().parent.parent
         desc = load_descriptor(
-            repo / "docs" / "workflow" / "workflow.yaml",
+            repo / "docs" / "workflow" / "workflow.json",
             schema_path=repo / "docs" / "workflow" / "workflow-schema.json",
         )
         return InvariantEvaluator(desc.invariants, querier=MockQuerier(0))

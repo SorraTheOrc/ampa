@@ -1298,118 +1298,57 @@ main() {
     # We attempt to copy the descriptor from the installed package then fall
     # back to the bundled resource inside the installer.
 
-    # Derive candidate descriptor sources (allow json or yaml variants)
-    plugin_workflow_json="$TARGET_DIR/ampa_py/ampa/docs/workflow/workflow.json"
-    plugin_workflow_yaml="$TARGET_DIR/ampa_py/ampa/docs/workflow/workflow.yaml"
-    plugin_workflow_yml="$TARGET_DIR/ampa_py/ampa/docs/workflow/workflow.yml"
-    bundled_workflow_json="$SCRIPT_DIR/../resources/ampa_py/ampa/docs/workflow/workflow.json"
-    bundled_workflow_yaml="$SCRIPT_DIR/../resources/ampa_py/ampa/docs/workflow/workflow.yaml"
-    bundled_workflow_yml="$SCRIPT_DIR/../resources/ampa_py/ampa/docs/workflow/workflow.yml"
+    # Canonical workflow descriptor source: docs/workflow/workflow.json at the repo root
+    REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd || true)"
+    repo_workflow_json="$REPO_ROOT/docs/workflow/workflow.json"
 
-    # Destination: project-local .worklog/ampa/workflow.json (always attempt)
-    project_ampa_dir=".worklog/ampa"
-    mkdir -p "$project_ampa_dir"
-    project_dest="$project_ampa_dir/workflow.json"
+    # Publication target depends on install mode:
+    # - Local install (TARGET_DIR == ".worklog/plugins" or --local): publish to project .worklog/ampa/workflow.json (if not already present)
+    # - Global install: publish to user XDG config ${XDG_CONFIG_HOME:-$HOME/.config}/opencode/.worklog/ampa/workflow.json (if not already present)
+    if [ "$TARGET_DIR" = ".worklog/plugins" ] || [ "$LOCAL_INSTALL" -eq 1 ]; then
+      project_ampa_dir=".worklog/ampa"
+      mkdir -p "$project_ampa_dir"
+      project_dest="$project_ampa_dir/workflow.json"
 
-    copied_descriptor=""
-    if [ -f "$plugin_workflow_json" ]; then
-      src_to_copy="$plugin_workflow_json"
-    elif [ -f "$plugin_workflow_yaml" ]; then
-      src_to_copy="$plugin_workflow_yaml"
-    elif [ -f "$plugin_workflow_yml" ]; then
-      src_to_copy="$plugin_workflow_yml"
-    elif [ -f "$bundled_workflow_json" ]; then
-      src_to_copy="$bundled_workflow_json"
-    elif [ -f "$bundled_workflow_yaml" ]; then
-      src_to_copy="$bundled_workflow_yaml"
-    elif [ -f "$bundled_workflow_yml" ]; then
-      src_to_copy="$bundled_workflow_yml"
-    else
-      src_to_copy=""
-    fi
-
-    if [ -n "$src_to_copy" ]; then
-      if cp -p "$src_to_copy" "$project_dest" 2>/dev/null || cp "$src_to_copy" "$project_dest" 2>/dev/null; then
-        log_info "Published workflow descriptor to $project_dest"
-        log_decision "PUBLISHED_WORKFLOW_PROJECT=$project_dest"
-        copied_descriptor="$project_dest"
-      fi
-    else
-      log_info "No workflow descriptor found to publish into project .worklog/ampa (skipping project publish)"
-      log_decision "PUBLISHED_WORKFLOW_PROJECT=skipped"
-    fi
-
-    # Destination: user XDG config (global per-user)
-    xdg_base="${XDG_CONFIG_HOME:-$HOME/.config}"
-    global_ampa_dir="$xdg_base/opencode/.worklog/ampa"
-    mkdir -p "$global_ampa_dir"
-    global_dest="$global_ampa_dir/workflow.json"
-
-    # If we already copied to project, prefer copying that file to the global
-    # user-level location so both have identical content; otherwise copy from
-    # the plugin or bundled source as available.
-    if [ -n "$copied_descriptor" ] && [ -f "$copied_descriptor" ]; then
-      if cp -p "$copied_descriptor" "$global_dest" 2>/dev/null || cp "$copied_descriptor" "$global_dest" 2>/dev/null; then
-        log_info "Published workflow descriptor to $global_dest (from project copy)"
-        log_decision "PUBLISHED_WORKFLOW_XDG_FROM_PROJECT=$global_dest"
-      fi
-    else
-      # Try to copy any available plugin/bundled candidate to XDG location
-      if [ -f "$plugin_workflow_json" ]; then
-        src_to_copy_x="$plugin_workflow_json"
-      elif [ -f "$plugin_workflow_yaml" ]; then
-        src_to_copy_x="$plugin_workflow_yaml"
-      elif [ -f "$plugin_workflow_yml" ]; then
-        src_to_copy_x="$plugin_workflow_yml"
-      elif [ -f "$bundled_workflow_json" ]; then
-        src_to_copy_x="$bundled_workflow_json"
-      elif [ -f "$bundled_workflow_yaml" ]; then
-        src_to_copy_x="$bundled_workflow_yaml"
-      elif [ -f "$bundled_workflow_yml" ]; then
-        src_to_copy_x="$bundled_workflow_yml"
+      if [ -f "$project_dest" ]; then
+        log_info "Project workflow descriptor already exists at $project_dest; skipping publish"
+        log_decision "PUBLISHED_WORKFLOW_PROJECT=exists"
       else
-        src_to_copy_x=""
-      fi
-
-      if [ -n "$src_to_copy_x" ]; then
-        if cp -p "$src_to_copy_x" "$global_dest" 2>/dev/null || cp "$src_to_copy_x" "$global_dest" 2>/dev/null; then
-          log_info "Published workflow descriptor (to XDG) $global_dest"
-          log_decision "PUBLISHED_WORKFLOW_XDG=$global_dest"
+        if [ -f "$repo_workflow_json" ]; then
+          if cp -p "$repo_workflow_json" "$project_dest" 2>/dev/null || cp "$repo_workflow_json" "$project_dest" 2>/dev/null; then
+            log_info "Published canonical workflow descriptor to $project_dest"
+            log_decision "PUBLISHED_WORKFLOW_PROJECT=$project_dest"
+          else
+            log_error "Failed to publish canonical workflow descriptor to $project_dest"
+            log_decision "PUBLISHED_WORKFLOW_PROJECT=failed"
+          fi
+        else
+          log_info "Canonical workflow descriptor not found at docs/workflow/workflow.json; skipping project publish"
+          log_decision "PUBLISHED_WORKFLOW_PROJECT=skipped"
         fi
-      else
-        log_info "No workflow descriptor found to publish into XDG config (skipping)"
-        log_decision "PUBLISHED_WORKFLOW_XDG=skipped"
       fi
-    fi
-
-    # Legacy global publish (installer behaviour retained for compatibility)
-    if [ "$LOCAL_INSTALL" -eq 0 ] && [ "$TARGET_DIR" = "$GLOBAL_PLUGINS_DIR" ]; then
+    else
+      xdg_base="${XDG_CONFIG_HOME:-$HOME/.config}"
+      global_ampa_dir="$xdg_base/opencode/.worklog/ampa"
       mkdir -p "$global_ampa_dir"
-      legacy_dest="$global_ampa_dir/workflow.json"
-      # Legacy publish: prefer json then yaml candidates
-      if [ -f "$plugin_workflow_json" ]; then
-        src_to_copy_legacy="$plugin_workflow_json"
-      elif [ -f "$plugin_workflow_yaml" ]; then
-        src_to_copy_legacy="$plugin_workflow_yaml"
-      elif [ -f "$plugin_workflow_yml" ]; then
-        src_to_copy_legacy="$plugin_workflow_yml"
-      elif [ -f "$bundled_workflow_json" ]; then
-        src_to_copy_legacy="$bundled_workflow_json"
-      elif [ -f "$bundled_workflow_yaml" ]; then
-        src_to_copy_legacy="$bundled_workflow_yaml"
-      elif [ -f "$bundled_workflow_yml" ]; then
-        src_to_copy_legacy="$bundled_workflow_yml"
-      else
-        src_to_copy_legacy=""
-      fi
+      global_dest="$global_ampa_dir/workflow.json"
 
-      if [ -n "$src_to_copy_legacy" ]; then
-        if cp -p "$src_to_copy_legacy" "$legacy_dest" 2>/dev/null || cp "$src_to_copy_legacy" "$legacy_dest" 2>/dev/null; then
-          log_info "(legacy) Published workflow descriptor to $legacy_dest"
-          log_decision "PUBLISHED_WORKFLOW_LEGACY=$legacy_dest"
-        fi
+      if [ -f "$global_dest" ]; then
+        log_info "User XDG workflow descriptor already exists at $global_dest; skipping publish"
+        log_decision "PUBLISHED_WORKFLOW_XDG=exists"
       else
-        log_decision "PUBLISHED_WORKFLOW_LEGACY=skipped"
+        if [ -f "$repo_workflow_json" ]; then
+          if cp -p "$repo_workflow_json" "$global_dest" 2>/dev/null || cp "$repo_workflow_json" "$global_dest" 2>/dev/null; then
+            log_info "Published canonical workflow descriptor to $global_dest"
+            log_decision "PUBLISHED_WORKFLOW_XDG=$global_dest"
+          else
+            log_error "Failed to publish canonical workflow descriptor to $global_dest"
+            log_decision "PUBLISHED_WORKFLOW_XDG=failed"
+          fi
+        else
+          log_info "Canonical workflow descriptor not found at docs/workflow/workflow.json; skipping XDG publish"
+          log_decision "PUBLISHED_WORKFLOW_XDG=skipped"
+        fi
       fi
     fi
 

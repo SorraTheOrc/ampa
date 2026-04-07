@@ -489,26 +489,57 @@ class Scheduler:
                         # Prefer project-local descriptor (cwd/.worklog/ampa/workflow.json),
                         # then user XDG config (~/.config/opencode/.worklog/ampa/workflow.json),
                         # then package-local docs/workflow/workflow.json
+                        # project-local candidates (json, yaml, yml)
                         try:
-                            project_candidate = os.path.join(os.getcwd(), ".worklog", "ampa", "workflow.json")
+                            proj_base = os.path.join(os.getcwd(), ".worklog", "ampa")
+                            project_candidates = [
+                                os.path.join(proj_base, "workflow.json"),
+                                os.path.join(proj_base, "workflow.yaml"),
+                                os.path.join(proj_base, "workflow.yml"),
+                            ]
                         except Exception:
-                            project_candidate = None
+                            project_candidates = []
+
+                        # XDG user-level candidates
                         try:
                             xdg_base = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-                            xdg_candidate = os.path.join(xdg_base, "opencode", ".worklog", "ampa", "workflow.json")
+                            xdg_base = os.path.join(xdg_base, "opencode", ".worklog", "ampa")
+                            xdg_candidates = [
+                                os.path.join(xdg_base, "workflow.json"),
+                                os.path.join(xdg_base, "workflow.yaml"),
+                                os.path.join(xdg_base, "workflow.yml"),
+                            ]
                         except Exception:
-                            xdg_candidate = None
+                            xdg_candidates = []
 
                         module_root = os.path.dirname(os.path.dirname(__file__))
                         module_docs = os.path.join(module_root, "docs", "workflow")
-                        json_candidate = os.path.join(module_docs, "workflow.json")
+                        module_candidates = [
+                            os.path.join(module_docs, "workflow.json"),
+                            os.path.join(module_docs, "workflow.yaml"),
+                            os.path.join(module_docs, "workflow.yml"),
+                        ]
 
-                        if project_candidate and os.path.isfile(project_candidate):
-                            descriptor_path = project_candidate
-                        elif xdg_candidate and os.path.isfile(xdg_candidate):
-                            descriptor_path = xdg_candidate
-                        else:
-                            descriptor_path = json_candidate
+                        descriptor_path = None
+                        for c in project_candidates:
+                            if c and os.path.isfile(c):
+                                descriptor_path = c
+                                break
+                        if descriptor_path is None:
+                            for c in xdg_candidates:
+                                if c and os.path.isfile(c):
+                                    descriptor_path = c
+                                    break
+                        if descriptor_path is None:
+                            # fallback to module candidates; pick first even if missing
+                            found = False
+                            for c in module_candidates:
+                                if c and os.path.isfile(c):
+                                    descriptor_path = c
+                                    found = True
+                                    break
+                            if not found:
+                                descriptor_path = module_candidates[0]
                     # Attempt to load the workflow descriptor explicitly and
                     # provide a clear diagnostic on failure. Previously this
                     # could raise or be swallowed by higher-level exception

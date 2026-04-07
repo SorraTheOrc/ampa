@@ -24,7 +24,7 @@ Usage::
         candidate_selector=selector,
         invariant_evaluator=evaluator,
         work_item_fetcher=fetcher,
-        config=EngineConfig(descriptor_path="docs/workflow/workflow.yaml"),
+        config=EngineConfig(descriptor_path="docs/workflow/workflow.json"),
     )
     result = engine.process_delegation()
 """

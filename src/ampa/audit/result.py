@@ -243,7 +243,7 @@ def _parse_criteria_table(section: str) -> list[CriterionResult]:
 # Closure recommendation detection
 # ---------------------------------------------------------------------------
 
-# From workflow.yaml invariants:
+# From workflow.json invariants:
 #   audit_recommends_closure: regex(comments, "(?i)(can this item be closed?\s*yes|...)")
 #   audit_does_not_recommend_closure: regex(comments, "(?i)can this item be closed?\s*no")
 _RECOMMENDS_CLOSURE_RE = re.compile(

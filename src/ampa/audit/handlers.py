@@ -1,6 +1,6 @@
 """Descriptor-driven audit command handlers.
 
-Implements the three audit lifecycle commands from ``workflow.yaml``:
+Implements the three audit lifecycle commands from ``workflow.json``:
 
 - ``audit_result``: Parse audit output, evaluate pre-invariants, transition
   to ``audit_passed``, and post a structured ``# AMPA Audit Result`` comment.

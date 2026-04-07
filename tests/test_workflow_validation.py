@@ -26,7 +26,6 @@ from jsonschema import Draft202012Validator
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _WORKFLOW_JSON = _REPO_ROOT / "docs" / "workflow" / "workflow.json"
-_WORKFLOW_YAML = _REPO_ROOT / "docs" / "workflow" / "workflow.yaml"
 _SCHEMA_PATH = _REPO_ROOT / "docs" / "workflow" / "workflow-schema.json"
 
 # ---------------------------------------------------------------------------
@@ -59,13 +58,6 @@ def canonical_json() -> dict[str, Any]:
     """Load the canonical workflow.json once per module."""
     with open(_WORKFLOW_JSON) as f:
         return json.load(f)
-
-
-@pytest.fixture(scope="module")
-def canonical_yaml() -> dict[str, Any]:
-    """Load the canonical workflow.yaml once per module."""
-    with open(_WORKFLOW_YAML) as f:
-        return yaml.safe_load(f)
 
 
 def _schema_errors(descriptor: dict, schema: dict) -> list[str]:
@@ -590,62 +582,4 @@ class TestCanonicalDescriptor:
         validate_delegation(canonical_json, result)
         assert result.errors == [], f"Delegation errors:\n" + "\n".join(result.errors)
 
-    def test_tcd06_yaml_json_equivalent(
-        self, canonical_json: dict, canonical_yaml: dict
-    ) -> None:
-        """T-CD-06: workflow.yaml and workflow.json are structurally equivalent.
-
-        Compares the YAML and JSON representations after loading.  The YAML is
-        the authored source and the JSON is generated; they must agree on
-        core structural elements: version, metadata name, status/stage lists,
-        state aliases, command names, terminal states, and invariant names.
-
-        Note: The YAML may use YAML-specific features (multi-line strings,
-        flow mappings) that normalize differently from JSON.  Only logical
-        structure is compared.
-        """
-        # Version must match exactly
-        assert canonical_yaml["version"] == canonical_json["version"]
-
-        # Metadata name must match
-        assert canonical_yaml["metadata"]["name"] == canonical_json["metadata"]["name"]
-
-        # Status values must match (order-independent)
-        assert sorted(canonical_yaml["status"]) == sorted(canonical_json["status"])
-
-        # Stage values — YAML is the source of truth; JSON may have drifted.
-        # We check they share the same core stages and report differences.
-        yaml_stages = set(canonical_yaml["stage"])
-        json_stages = set(canonical_json["stage"])
-        only_yaml = yaml_stages - json_stages
-        only_json = json_stages - yaml_stages
-        assert only_yaml == set() and only_json == set(), (
-            f"Stage drift detected between YAML and JSON.\n"
-            f"  Only in YAML: {only_yaml}\n"
-            f"  Only in JSON: {only_json}\n"
-            f"The JSON should be regenerated from the YAML source."
-        )
-
-        # State alias keys must match
-        assert set(canonical_yaml.get("states", {}).keys()) == set(
-            canonical_json.get("states", {}).keys()
-        )
-
-        # Command names must match
-        assert set(canonical_yaml.get("commands", {}).keys()) == set(
-            canonical_json.get("commands", {}).keys()
-        )
-
-        # Terminal states must match
-        assert canonical_yaml.get("terminal_states") == canonical_json.get(
-            "terminal_states"
-        )
-
-        # Invariant names must match
-        yaml_inv_names = sorted(
-            inv["name"] for inv in canonical_yaml.get("invariants", [])
-        )
-        json_inv_names = sorted(
-            inv["name"] for inv in canonical_json.get("invariants", [])
-        )
-        assert yaml_inv_names == json_inv_names
+    # Note: YAML source has been retired; tests operate against canonical JSON only.

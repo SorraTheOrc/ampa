@@ -115,8 +115,10 @@ def test_scheduler_audit_routes_to_descriptor_handlers(tmp_path, monkeypatch):
         if cmd_s.startswith(f"wl update {work_id}"):
             if "--status completed" in cmd_s:
                 current_status = "completed"
-            if "--stage audit_passed" in cmd_s:
-                current_stage = "audit_passed"
+            # Expect the canonical "done" stage for completed items set by
+            # the audit handlers.
+            if "--stage done" in cmd_s:
+                current_stage = "done"
             elif "--stage in_review" in cmd_s:
                 current_stage = "in_review"
             return subprocess.CompletedProcess(cmd, 0, '{"success": true}', "")
@@ -140,10 +142,7 @@ def test_scheduler_audit_routes_to_descriptor_handlers(tmp_path, monkeypatch):
     assert any(c.startswith("wl list --stage in_review --json") for c in calls)
     assert any(f'/audit {work_id}' in c for c in calls)
     assert any(c.startswith(f"wl comment add {work_id}") for c in calls)
-    assert any(
-        c.startswith(f"wl update {work_id}") and "--stage audit_passed" in c
-        for c in calls
-    )
+    assert any(c.startswith(f"wl update {work_id}") and ("--stage done" in c) for c in calls)
     assert any(c.startswith("gh pr view 42 --repo example/repo --json merged") for c in calls)
 
 
