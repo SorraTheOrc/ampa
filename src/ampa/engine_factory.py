@@ -87,15 +87,41 @@ def build_engine(
         ``SchedulerStore`` instance (used by ``StoreDispatchRecorder``).
     """
     try:
-        descriptor_path = os.getenv(
-            "AMPA_WORKFLOW_DESCRIPTOR",
-            os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
-                "docs",
-                "workflow",
-                "workflow.yaml",
-            ),
-        )
+        # Resolve descriptor path with the following precedence:
+        # 1. AMPA_WORKFLOW_DESCRIPTOR env var (explicit override)
+        # 2. project-local: <cwd>/.worklog/ampa/workflow.json
+        # 3. user-level XDG config: ${XDG_CONFIG_HOME:-$HOME/.config}/opencode/.worklog/ampa/workflow.json
+        # 4. module-local docs/workflow/workflow.json (package-provided canonical)
+        env_path = os.getenv("AMPA_WORKFLOW_DESCRIPTOR")
+        if env_path:
+            descriptor_path = env_path
+        else:
+            # Project-local runtime location (cwd/.worklog/ampa/workflow.json)
+            try:
+                project_candidate = os.path.join(os.getcwd(), ".worklog", "ampa", "workflow.json")
+            except Exception:
+                project_candidate = None
+
+            # User XDG config fallback
+            try:
+                xdg_base = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+                xdg_candidate = os.path.join(xdg_base, "opencode", ".worklog", "ampa", "workflow.json")
+            except Exception:
+                xdg_candidate = None
+
+            # Module-local package docs path (fallback)
+            module_root = os.path.dirname(os.path.dirname(__file__))
+            module_docs = os.path.join(module_root, "docs", "workflow")
+            module_candidate = os.path.join(module_docs, "workflow.json")
+
+            # Pick the first existing path in order
+            descriptor_path = None
+            if project_candidate and os.path.isfile(project_candidate):
+                descriptor_path = project_candidate
+            elif xdg_candidate and os.path.isfile(xdg_candidate):
+                descriptor_path = xdg_candidate
+            else:
+                descriptor_path = module_candidate
 
         descriptor = load_descriptor(descriptor_path)
 

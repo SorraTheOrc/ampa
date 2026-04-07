@@ -482,15 +482,33 @@ class Scheduler:
                 if self.engine is not None:
                     descriptor = getattr(self.engine, "descriptor", None)
                 if descriptor is None:
-                    descriptor_path = os.getenv(
-                        "AMPA_WORKFLOW_DESCRIPTOR",
-                        os.path.join(
-                            os.path.dirname(os.path.dirname(__file__)),
-                            "docs",
-                            "workflow",
-                            "workflow.yaml",
-                        ),
-                    )
+                    env_path = os.getenv("AMPA_WORKFLOW_DESCRIPTOR")
+                    if env_path:
+                        descriptor_path = env_path
+                    else:
+                        # Prefer project-local descriptor (cwd/.worklog/ampa/workflow.json),
+                        # then user XDG config (~/.config/opencode/.worklog/ampa/workflow.json),
+                        # then package-local docs/workflow/workflow.json
+                        try:
+                            project_candidate = os.path.join(os.getcwd(), ".worklog", "ampa", "workflow.json")
+                        except Exception:
+                            project_candidate = None
+                        try:
+                            xdg_base = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+                            xdg_candidate = os.path.join(xdg_base, "opencode", ".worklog", "ampa", "workflow.json")
+                        except Exception:
+                            xdg_candidate = None
+
+                        module_root = os.path.dirname(os.path.dirname(__file__))
+                        module_docs = os.path.join(module_root, "docs", "workflow")
+                        json_candidate = os.path.join(module_docs, "workflow.json")
+
+                        if project_candidate and os.path.isfile(project_candidate):
+                            descriptor_path = project_candidate
+                        elif xdg_candidate and os.path.isfile(xdg_candidate):
+                            descriptor_path = xdg_candidate
+                        else:
+                            descriptor_path = json_candidate
                     # Attempt to load the workflow descriptor explicitly and
                     # provide a clear diagnostic on failure. Previously this
                     # could raise or be swallowed by higher-level exception
@@ -597,21 +615,41 @@ class Scheduler:
                             result.details,
                         )
                         try:
-                            notifications_module.notify(
-                                title=f"Audit failed — {work_item.get('title') or work_item_id}",
-                                body=f"{result.reason}: {result.details}",
-                                message_type="error",
-                            )
+                            # Include work item id in notification title for clarity
+                            title_base = work_item.get("title") or work_item_id
+                            title_with_id = f"{title_base} [{work_item_id}]"
+
+                            # Send the audit failure as an inline fenced code
+                            # block for quick visibility and attach the full
+                            # markdown as a `.md` file so operators can open
+                            # the complete report in Discord.
+                            full_md = str(result.details or result.reason or "")
+                            # Prepare a safe inline excerpt (keep well under
+                            # Discord's 2000-char message limit).
+                            excerpt = full_md if len(full_md) <= 1500 else full_md[:1497] + "..."
+                            content = f"```md\n{excerpt}\n```"
+                            attachment = {"filename": f"audit-{work_item_id}.md", "content": full_md}
+                            payload = {"content": content, "attachments": [attachment]}
+                            notifications_module.notify("", payload=payload, message_type="error")
                         except Exception:
                             LOG.exception("Failed to send audit failure notification")
                         return False
 
                     try:
-                        notifications_module.notify(
-                            title=f"Audit Result — {work_item.get('title') or work_item_id}",
-                            body=result.details or result.reason,
-                            message_type="command",
-                        )
+                        # Use the formatted comment text (result.details) when
+                        # available and always append the work item id to the
+                        # title so Discord messages can be traced back easily.
+                        title_base = work_item.get("title") or work_item_id
+                        title_with_id = f"{title_base} [{work_item_id}]"
+
+                        # Send the audit summary as an inline fenced code
+                        # block and attach the full markdown as a `.md` file.
+                        full_md = str(result.details or result.reason or "")
+                        excerpt = full_md if len(full_md) <= 1500 else full_md[:1497] + "..."
+                        content = f"```md\n{excerpt}\n```"
+                        attachment = {"filename": f"audit-{work_item_id}.md", "content": full_md}
+                        payload = {"content": content, "attachments": [attachment]}
+                        notifications_module.notify("", payload=payload, message_type="command")
                     except Exception:
                         LOG.exception("Failed to send audit summary notification")
 
