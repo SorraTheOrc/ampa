@@ -1298,9 +1298,13 @@ main() {
     # We attempt to copy the descriptor from the installed package then fall
     # back to the bundled resource inside the installer.
 
-    # Derive candidate descriptor sources
+    # Derive candidate descriptor sources (allow json or yaml variants)
     plugin_workflow_json="$TARGET_DIR/ampa_py/ampa/docs/workflow/workflow.json"
+    plugin_workflow_yaml="$TARGET_DIR/ampa_py/ampa/docs/workflow/workflow.yaml"
+    plugin_workflow_yml="$TARGET_DIR/ampa_py/ampa/docs/workflow/workflow.yml"
     bundled_workflow_json="$SCRIPT_DIR/../resources/ampa_py/ampa/docs/workflow/workflow.json"
+    bundled_workflow_yaml="$SCRIPT_DIR/../resources/ampa_py/ampa/docs/workflow/workflow.yaml"
+    bundled_workflow_yml="$SCRIPT_DIR/../resources/ampa_py/ampa/docs/workflow/workflow.yml"
 
     # Destination: project-local .worklog/ampa/workflow.json (always attempt)
     project_ampa_dir=".worklog/ampa"
@@ -1309,19 +1313,29 @@ main() {
 
     copied_descriptor=""
     if [ -f "$plugin_workflow_json" ]; then
-      if cp -p "$plugin_workflow_json" "$project_dest" 2>/dev/null || cp "$plugin_workflow_json" "$project_dest" 2>/dev/null; then
+      src_to_copy="$plugin_workflow_json"
+    elif [ -f "$plugin_workflow_yaml" ]; then
+      src_to_copy="$plugin_workflow_yaml"
+    elif [ -f "$plugin_workflow_yml" ]; then
+      src_to_copy="$plugin_workflow_yml"
+    elif [ -f "$bundled_workflow_json" ]; then
+      src_to_copy="$bundled_workflow_json"
+    elif [ -f "$bundled_workflow_yaml" ]; then
+      src_to_copy="$bundled_workflow_yaml"
+    elif [ -f "$bundled_workflow_yml" ]; then
+      src_to_copy="$bundled_workflow_yml"
+    else
+      src_to_copy=""
+    fi
+
+    if [ -n "$src_to_copy" ]; then
+      if cp -p "$src_to_copy" "$project_dest" 2>/dev/null || cp "$src_to_copy" "$project_dest" 2>/dev/null; then
         log_info "Published workflow descriptor to $project_dest"
         log_decision "PUBLISHED_WORKFLOW_PROJECT=$project_dest"
         copied_descriptor="$project_dest"
       fi
-    elif [ -f "$bundled_workflow_json" ]; then
-      if cp -p "$bundled_workflow_json" "$project_dest" 2>/dev/null || cp "$bundled_workflow_json" "$project_dest" 2>/dev/null; then
-        log_info "Published workflow descriptor (from bundled resources) to $project_dest"
-        log_decision "PUBLISHED_WORKFLOW_PROJECT_BUNDLED=$project_dest"
-        copied_descriptor="$project_dest"
-      fi
     else
-      log_info "No workflow.json found to publish into project .worklog/ampa (skipping project publish)"
+      log_info "No workflow descriptor found to publish into project .worklog/ampa (skipping project publish)"
       log_decision "PUBLISHED_WORKFLOW_PROJECT=skipped"
     fi
 
@@ -1340,18 +1354,30 @@ main() {
         log_decision "PUBLISHED_WORKFLOW_XDG_FROM_PROJECT=$global_dest"
       fi
     else
+      # Try to copy any available plugin/bundled candidate to XDG location
       if [ -f "$plugin_workflow_json" ]; then
-        if cp -p "$plugin_workflow_json" "$global_dest" 2>/dev/null || cp "$plugin_workflow_json" "$global_dest" 2>/dev/null; then
-          log_info "Published workflow descriptor to $global_dest"
+        src_to_copy_x="$plugin_workflow_json"
+      elif [ -f "$plugin_workflow_yaml" ]; then
+        src_to_copy_x="$plugin_workflow_yaml"
+      elif [ -f "$plugin_workflow_yml" ]; then
+        src_to_copy_x="$plugin_workflow_yml"
+      elif [ -f "$bundled_workflow_json" ]; then
+        src_to_copy_x="$bundled_workflow_json"
+      elif [ -f "$bundled_workflow_yaml" ]; then
+        src_to_copy_x="$bundled_workflow_yaml"
+      elif [ -f "$bundled_workflow_yml" ]; then
+        src_to_copy_x="$bundled_workflow_yml"
+      else
+        src_to_copy_x=""
+      fi
+
+      if [ -n "$src_to_copy_x" ]; then
+        if cp -p "$src_to_copy_x" "$global_dest" 2>/dev/null || cp "$src_to_copy_x" "$global_dest" 2>/dev/null; then
+          log_info "Published workflow descriptor (to XDG) $global_dest"
           log_decision "PUBLISHED_WORKFLOW_XDG=$global_dest"
         fi
-      elif [ -f "$bundled_workflow_json" ]; then
-        if cp -p "$bundled_workflow_json" "$global_dest" 2>/dev/null || cp "$bundled_workflow_json" "$global_dest" 2>/dev/null; then
-          log_info "Published workflow descriptor (from bundled resources) to $global_dest"
-          log_decision "PUBLISHED_WORKFLOW_XDG_BUNDLED=$global_dest"
-        fi
       else
-        log_info "No workflow.json found to publish into XDG config (skipping)"
+        log_info "No workflow descriptor found to publish into XDG config (skipping)"
         log_decision "PUBLISHED_WORKFLOW_XDG=skipped"
       fi
     fi
@@ -1360,15 +1386,27 @@ main() {
     if [ "$LOCAL_INSTALL" -eq 0 ] && [ "$TARGET_DIR" = "$GLOBAL_PLUGINS_DIR" ]; then
       mkdir -p "$global_ampa_dir"
       legacy_dest="$global_ampa_dir/workflow.json"
+      # Legacy publish: prefer json then yaml candidates
       if [ -f "$plugin_workflow_json" ]; then
-        if cp -p "$plugin_workflow_json" "$legacy_dest" 2>/dev/null || cp "$plugin_workflow_json" "$legacy_dest" 2>/dev/null; then
+        src_to_copy_legacy="$plugin_workflow_json"
+      elif [ -f "$plugin_workflow_yaml" ]; then
+        src_to_copy_legacy="$plugin_workflow_yaml"
+      elif [ -f "$plugin_workflow_yml" ]; then
+        src_to_copy_legacy="$plugin_workflow_yml"
+      elif [ -f "$bundled_workflow_json" ]; then
+        src_to_copy_legacy="$bundled_workflow_json"
+      elif [ -f "$bundled_workflow_yaml" ]; then
+        src_to_copy_legacy="$bundled_workflow_yaml"
+      elif [ -f "$bundled_workflow_yml" ]; then
+        src_to_copy_legacy="$bundled_workflow_yml"
+      else
+        src_to_copy_legacy=""
+      fi
+
+      if [ -n "$src_to_copy_legacy" ]; then
+        if cp -p "$src_to_copy_legacy" "$legacy_dest" 2>/dev/null || cp "$src_to_copy_legacy" "$legacy_dest" 2>/dev/null; then
           log_info "(legacy) Published workflow descriptor to $legacy_dest"
           log_decision "PUBLISHED_WORKFLOW_LEGACY=$legacy_dest"
-        fi
-      elif [ -f "$bundled_workflow_json" ]; then
-        if cp -p "$bundled_workflow_json" "$legacy_dest" 2>/dev/null || cp "$bundled_workflow_json" "$legacy_dest" 2>/dev/null; then
-          log_info "(legacy) Published workflow descriptor (from bundled resources) to $legacy_dest"
-          log_decision "PUBLISHED_WORKFLOW_LEGACY_BUNDLED=$legacy_dest"
         fi
       else
         log_decision "PUBLISHED_WORKFLOW_LEGACY=skipped"
