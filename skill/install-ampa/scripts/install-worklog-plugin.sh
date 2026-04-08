@@ -107,6 +107,11 @@ parse_args() {
   FORCE_RESTART=0
   FORCE_NO_RESTART=0
   LOCAL_INSTALL=0
+  # New options: force publishing workflow descriptor, validate workflow JSON,
+  # and explicit docs path for locating the canonical descriptor.
+  FORCE_WORKFLOW_PUBLISH=0
+  VALIDATE_WORKFLOW=0
+  DOCS_PATH=""
 
   # Parse options
   while [ "$#" -gt 0 ]; do
@@ -176,6 +181,27 @@ parse_args() {
           exit 2
         fi
         ;;
+      --force-workflow)
+        # Force overwrite of existing published workflow.json
+        FORCE_WORKFLOW_PUBLISH=1
+        shift
+        ;;
+      --validate-workflow)
+        # Validate workflow.json against bundled schema before publishing
+        VALIDATE_WORKFLOW=1
+        shift
+        ;;
+      --docs-path)
+        # Explicit path to canonical docs/workflow/workflow.json
+        shift
+        if [ "$#" -gt 0 ]; then
+          DOCS_PATH="$1"
+          shift
+        else
+          log_error "--docs-path requires a value"
+          exit 2
+        fi
+        ;;
       --*)
         log_error "Unknown option: $1"
         exit 2
@@ -213,6 +239,15 @@ parse_args() {
   else
     # Default: global install directory
     TARGET_DIR="$GLOBAL_PLUGINS_DIR"
+  fi
+
+  # If an explicit docs path was provided, prefer it when locating the
+  # canonical workflow descriptor. This helps when the installer is invoked
+  # from packaged contexts where SCRIPT_DIR/../.. may not point to the repo root.
+  if [ -n "$DOCS_PATH" ]; then
+    repo_workflow_json="$DOCS_PATH"
+  else
+    repo_workflow_json=""
   fi
 }
 
@@ -1298,9 +1333,131 @@ main() {
     # We attempt to copy the descriptor from the installed package then fall
     # back to the bundled resource inside the installer.
 
-    # Canonical workflow descriptor source: docs/workflow/workflow.json at the repo root
-    REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd || true)"
-    repo_workflow_json="$REPO_ROOT/docs/workflow/workflow.json"
+    # Determine canonical workflow descriptor source. Priority:
+    # 1) explicit --docs-path provided by caller
+    # 2) docs/workflow/workflow.json found via git repo root (preferred)
+    # 3) docs/workflow/workflow.json relative to an upward search from the
+    #    installer's script directory, then from the current working dir.
+    if [ -z "${repo_workflow_json:-}" ]; then
+      repo_workflow_json=""
+
+      # Try git to find repo root relative to the script directory
+      if command -v git >/dev/null 2>&1; then
+        if git -C "$SCRIPT_DIR" rev-parse --show-toplevel >/dev/null 2>&1; then
+          REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || true)"
+          candidate="$REPO_ROOT/docs/workflow/workflow.json"
+          if [ -f "$candidate" ]; then
+            repo_workflow_json="$candidate"
+          fi
+        fi
+      fi
+
+      # Fallback: check a fixed relative path (three levels up from scripts)
+      if [ -z "$repo_workflow_json" ]; then
+        REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." >/dev/null 2>&1 && pwd || true)"
+        candidate="$REPO_ROOT/docs/workflow/workflow.json"
+        if [ -f "$candidate" ]; then
+          repo_workflow_json="$candidate"
+        fi
+      fi
+
+      # Final fallback: search upwards from the script dir and from CWD
+      if [ -z "$repo_workflow_json" ]; then
+        search_limit=8
+        curdir="$SCRIPT_DIR"
+        found=""
+        i=0
+        while [ "$i" -lt "$search_limit" ]; do
+          if [ -f "$curdir/docs/workflow/workflow.json" ]; then
+            found="$curdir/docs/workflow/workflow.json"
+            break
+          fi
+          if [ "$curdir" = "/" ] || [ -z "$curdir" ]; then break; fi
+          curdir="$(dirname "$curdir")"
+          i=$((i + 1))
+        done
+        if [ -n "$found" ]; then
+          repo_workflow_json="$found"
+        else
+          # try from cwd
+          curdir="$(pwd)"
+          i=0
+          while [ "$i" -lt "$search_limit" ]; do
+            if [ -f "$curdir/docs/workflow/workflow.json" ]; then
+              found="$curdir/docs/workflow/workflow.json"
+              break
+            fi
+            if [ "$curdir" = "/" ] || [ -z "$curdir" ]; then break; fi
+            curdir="$(dirname "$curdir")"
+            i=$((i + 1))
+          done
+      if [ -n "$found" ]; then
+          repo_workflow_json="$found"
+        fi
+      fi
+
+    # Additional fallback: if we still don't have a canonical workflow.json
+    # discovered via git/relative-search, prefer the workflow bundled with the
+    # installed Python package (TARGET_DIR/ampa_py/ampa/docs/workflow/workflow.json)
+    # or finally the installer's bundled resources. This ensures global installs
+    # that relied on the packaged python bundle still publish the canonical
+    # descriptor even when the repo root search fails.
+    if [ -z "${repo_workflow_json:-}" ]; then
+      # Check installed package location (TARGET_DIR is already set and the
+      # python package should have been copied by this point).
+      if [ -f "$TARGET_DIR/ampa_py/ampa/docs/workflow/workflow.json" ]; then
+        repo_workflow_json="$TARGET_DIR/ampa_py/ampa/docs/workflow/workflow.json"
+        log_decision "REPO_WORKFLOW_FROM_INSTALLED=$repo_workflow_json"
+      else
+        # Final fallback: bundled installer resources relative to the script
+        bundled="$SCRIPT_DIR/../resources/ampa_py/ampa/docs/workflow/workflow.json"
+        if [ -f "$bundled" ]; then
+          repo_workflow_json="$bundled"
+          log_decision "REPO_WORKFLOW_FROM_BUNDLED=$repo_workflow_json"
+        fi
+      fi
+    fi
+      fi
+    fi
+
+    # If validation requested, attempt to validate the JSON using python -c
+    # with jsonschema (if available) against the bundled schema. Validation
+    # failures abort publishing.
+    validate_ok=1
+    if [ "$VALIDATE_WORKFLOW" -eq 1 ] && [ -n "$repo_workflow_json" ]; then
+      schema_path="$SCRIPT_DIR/../resources/ampa_py/ampa/docs/workflow/workflow-schema.json"
+      if [ -f "$schema_path" ]; then
+        if command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; then
+          py_bin="$(command -v python3 2>/dev/null || command -v python)"
+          if ! "$py_bin" - <<PYCODE
+import json,sys
+from jsonschema import validate, ValidationError
+try:
+    data=json.load(open('${repo_workflow_json}'))
+    schema=json.load(open('${schema_path}'))
+    validate(instance=data,schema=schema)
+except ValidationError as e:
+    print('WORKFLOW_VALIDATION_FAILED', e)
+    sys.exit(2)
+except Exception as e:
+    print('WORKFLOW_VALIDATION_ERROR', e)
+    sys.exit(3)
+sys.exit(0)
+PYCODE
+          then
+            validate_ok=1
+          else
+            validate_ok=0
+            log_error "Workflow JSON validation failed for $repo_workflow_json (see above)"
+            log_decision "WORKFLOW_VALIDATION=failed"
+          fi
+        else
+          log_info "Validation requested but python not available; skipping validation"
+        fi
+      else
+        log_info "Validation requested but schema not bundled at $schema_path; skipping validation"
+      fi
+    fi
 
     # Publication target depends on install mode:
     # - Local install (TARGET_DIR == ".worklog/plugins" or --local): publish to project .worklog/ampa/workflow.json (if not already present)
@@ -1310,20 +1467,25 @@ main() {
       mkdir -p "$project_ampa_dir"
       project_dest="$project_ampa_dir/workflow.json"
 
-      if [ -f "$project_dest" ]; then
+       if [ -f "$project_dest" ] && [ "$FORCE_WORKFLOW_PUBLISH" -eq 0 ]; then
         log_info "Project workflow descriptor already exists at $project_dest; skipping publish"
         log_decision "PUBLISHED_WORKFLOW_PROJECT=exists"
       else
-        if [ -f "$repo_workflow_json" ]; then
-          if cp -p "$repo_workflow_json" "$project_dest" 2>/dev/null || cp "$repo_workflow_json" "$project_dest" 2>/dev/null; then
-            log_info "Published canonical workflow descriptor to $project_dest"
-            log_decision "PUBLISHED_WORKFLOW_PROJECT=$project_dest"
+        if [ -n "$repo_workflow_json" ] && [ -f "$repo_workflow_json" ]; then
+          if [ "$VALIDATE_WORKFLOW" -eq 1 ] && [ "$validate_ok" -ne 1 ]; then
+            log_error "Skipping publish because workflow.json validation failed"
+            log_decision "PUBLISHED_WORKFLOW_PROJECT=validation_failed"
           else
-            log_error "Failed to publish canonical workflow descriptor to $project_dest"
-            log_decision "PUBLISHED_WORKFLOW_PROJECT=failed"
+            if cp -p "$repo_workflow_json" "$project_dest" 2>/dev/null || cp "$repo_workflow_json" "$project_dest" 2>/dev/null; then
+              log_info "Published canonical workflow descriptor to $project_dest"
+              log_decision "PUBLISHED_WORKFLOW_PROJECT=$project_dest"
+            else
+              log_error "Failed to publish canonical workflow descriptor to $project_dest"
+              log_decision "PUBLISHED_WORKFLOW_PROJECT=failed"
+            fi
           fi
         else
-          log_info "Canonical workflow descriptor not found at docs/workflow/workflow.json; skipping project publish"
+          log_info "Canonical workflow descriptor not found; skipping project publish"
           log_decision "PUBLISHED_WORKFLOW_PROJECT=skipped"
         fi
       fi
@@ -1333,20 +1495,25 @@ main() {
       mkdir -p "$global_ampa_dir"
       global_dest="$global_ampa_dir/workflow.json"
 
-      if [ -f "$global_dest" ]; then
+      if [ -f "$global_dest" ] && [ "$FORCE_WORKFLOW_PUBLISH" -eq 0 ]; then
         log_info "User XDG workflow descriptor already exists at $global_dest; skipping publish"
         log_decision "PUBLISHED_WORKFLOW_XDG=exists"
       else
-        if [ -f "$repo_workflow_json" ]; then
-          if cp -p "$repo_workflow_json" "$global_dest" 2>/dev/null || cp "$repo_workflow_json" "$global_dest" 2>/dev/null; then
-            log_info "Published canonical workflow descriptor to $global_dest"
-            log_decision "PUBLISHED_WORKFLOW_XDG=$global_dest"
+        if [ -n "$repo_workflow_json" ] && [ -f "$repo_workflow_json" ]; then
+          if [ "$VALIDATE_WORKFLOW" -eq 1 ] && [ "$validate_ok" -ne 1 ]; then
+            log_error "Skipping XDG publish because workflow.json validation failed"
+            log_decision "PUBLISHED_WORKFLOW_XDG=validation_failed"
           else
-            log_error "Failed to publish canonical workflow descriptor to $global_dest"
-            log_decision "PUBLISHED_WORKFLOW_XDG=failed"
+            if cp -p "$repo_workflow_json" "$global_dest" 2>/dev/null || cp "$repo_workflow_json" "$global_dest" 2>/dev/null; then
+              log_info "Published canonical workflow descriptor to $global_dest"
+              log_decision "PUBLISHED_WORKFLOW_XDG=$global_dest"
+            else
+              log_error "Failed to publish canonical workflow descriptor to $global_dest"
+              log_decision "PUBLISHED_WORKFLOW_XDG=failed"
+            fi
           fi
         else
-          log_info "Canonical workflow descriptor not found at docs/workflow/workflow.json; skipping XDG publish"
+          log_info "Canonical workflow descriptor not found; skipping XDG publish"
           log_decision "PUBLISHED_WORKFLOW_XDG=skipped"
         fi
       fi
