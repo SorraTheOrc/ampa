@@ -258,12 +258,14 @@ def _format_audit_discord_summary(
     unmet = sum(1 for c in criteria if c.verdict not in {"met", "partial"})
 
     title = work_item_title or work_item_id
+    # Use an explicit Ready-to-close single-line statement per spec.
+    ready_value = "YES" if audit_result.recommends_closure else "NO"
     lines = [
         "# AMPA Audit Summary",
         "",
         f"- Title: {title}",
         f"- ID: {work_item_id}",
-        f"- Ready to merge (audit): {'Yes' if audit_result.recommends_closure else 'No'}",
+        f"- Ready to close: {ready_value}",
         f"- Criteria: {met} met, {partial} partial, {unmet} unmet ({total} total)",
     ]
 
@@ -279,22 +281,30 @@ def _format_audit_discord_summary(
             verdict = c.verdict.strip() or "unknown"
             lines.append(f"- [{c.number}] {criterion} | verdict: {verdict} | evidence: {evidence}")
 
+    # If closure was not recommended, include a concise missing-actions
+    # paragraph. Prefer closure_reason when available, otherwise summarise
+    # failed criteria into a short sentence.
     recommendation = (audit_result.closure_reason or "").strip()
-    if recommendation:
-        lines.extend(["", "## Recommendation", "", recommendation])
+    if audit_result.recommends_closure:
+        if recommendation:
+            lines.extend(["", "## Recommendation", "", recommendation])
+        else:
+            lines.extend(["", "## Recommendation", "", "Can this item be closed? Yes."])
     else:
-        lines.extend(
-            [
-                "",
-                "## Recommendation",
-                "",
-                (
-                    "Can this item be closed? Yes."
-                    if audit_result.recommends_closure
-                    else "Can this item be closed? No."
-                ),
-            ]
-        )
+        # Build a one-paragraph missing-actions summary
+        if recommendation:
+            missing = recommendation
+        else:
+            failed = [c for c in criteria if c.verdict != "met"]
+            if failed:
+                brief = "; ".join(
+                    f"[{c.number}] {c.criterion.strip()}" for c in failed[:3]
+                )
+                missing = f"Missing actions: {brief}."
+            else:
+                missing = "Missing actions: audit indicates unmet acceptance criteria."
+
+        lines.extend(["", "## Recommendation", "", missing])
 
     return "\n".join(lines)
 

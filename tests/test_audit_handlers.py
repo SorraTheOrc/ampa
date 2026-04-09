@@ -409,7 +409,7 @@ class TestAuditResultHandler:
         assert "# AMPA Audit Summary" in result.details
         assert "- Title: Feature A" in result.details
         assert "- ID: TEST-001" in result.details
-        assert "- Ready to merge (audit): Yes" in result.details
+        assert "- Ready to close: YES" in result.details
         assert "- Criteria: 2 met, 0 partial, 0 unmet (2 total)" in result.details
         assert "audit_report_markdown" in result.metadata
         assert "# AMPA Audit Result" in result.metadata["audit_report_markdown"]
@@ -434,7 +434,7 @@ class TestAuditResultHandler:
         assert result.success is True
         assert result.reason == "audit_recommends_no_closure"
         assert "# AMPA Audit Summary" in result.details
-        assert "- Ready to merge (audit): No" in result.details
+        assert "- Ready to close: NO" in result.details
         assert "## Failed acceptance criteria" in result.details
         assert "[2] Documentation | verdict: unmet | evidence: README missing" in result.details
         # No state transition when closure is not recommended.

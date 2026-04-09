@@ -154,7 +154,7 @@ def test_scheduler_audit_routes_to_descriptor_handlers(tmp_path, monkeypatch):
     payload = payload_calls[0]["kwargs"]["payload"]
     content = payload.get("content", "")
     assert f"# Routing item [{work_id}]" in content
-    assert "- Ready to merge (audit): Yes" in content
+    assert "- Ready to close: YES" in content
     assert "- Criteria: 1 met, 0 partial, 0 unmet (1 total)" in content
     attachments = payload.get("attachments", [])
     assert attachments
@@ -272,7 +272,7 @@ def test_scheduler_audit_non_closure_notification_has_failed_criteria(
     payload = payload_calls[0]["kwargs"]["payload"]
     content = payload.get("content", "")
     assert f"# Routing item no close [{work_id}]" in content
-    assert "- Ready to merge (audit): No" in content
+    assert "- Ready to close: NO" in content
     assert "## Failed acceptance criteria" in content
     assert "[2] Docs | verdict: unmet | evidence: missing readme" in content
     attachments = payload.get("attachments", [])
