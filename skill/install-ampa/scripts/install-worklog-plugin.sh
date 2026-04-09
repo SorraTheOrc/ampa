@@ -626,15 +626,21 @@ find_env_sample() {
   fi
 }
 
-# Back up existing .env file before removal
+# Back up existing .env (or small config) file before removal
+# Default backup directory is an explicit safe location under /tmp to
+# ensure backups survive any rm -rf operations in the plugin tree.
 backup_env_file() {
   local target_env="$1"
-  local backup_dir="${2:-.}"  # Use specified directory, or current directory by default
+  # Default backup directory: a controlled safe location
+  local backup_dir="${2:-/tmp/ampa_env_backups}"
   local backup_filename=$(basename "$target_env")
-  local backup_path="$backup_dir/$backup_filename.preinstall.$$"
   
   if [ -f "$target_env" ]; then
+    # Create the backup directory and resolve it to an absolute path so
+    # decision logs contain unambiguous locations.
     mkdir -p "$backup_dir" 2>/dev/null || true
+    backup_dir="$(cd "$backup_dir" 2>/dev/null && pwd || echo "$backup_dir")"
+    local backup_path="$backup_dir/${backup_filename}.preinstall.$$"
     if cp -a "$target_env" "$backup_path" 2>/dev/null || cp "$target_env" "$backup_path" 2>/dev/null; then
       echo "$backup_path"
       log_decision "BACKUP_ENV=$backup_path"
@@ -836,14 +842,20 @@ copy_python_package() {
    # Record pre-removal state
    log_decision "PRE_REMOVE_ls=$(ls -la \"$py_target_dir\" 2>/dev/null || true)"
    
-   # Backup existing .env if present
-   if [ -f "$py_target_dir/ampa/.env" ]; then
-     env_backup=$(backup_env_file "$py_target_dir/ampa/.env")
-   fi
+    # Backup existing .env if present. Ensure backup goes into the safe
+    # central backups directory so it is not removed by rm -rf on the
+    # plugin tree. backup_env_file default already uses /tmp/ampa_env_backups.
+    if [ -f "$py_target_dir/ampa/.env" ]; then
+      env_backup=$(backup_env_file "$py_target_dir/ampa/.env" "/tmp/ampa_env_backups")
+      log_decision "BACKUP_ENV_PROJECT=$env_backup"
+    fi
 
     # Backup existing scheduler_store.json if present
     # Store backup OUTSIDE the ampa directory so it survives the rm -rf
     if [ -f "$py_target_dir/ampa/scheduler_store.json" ]; then
+      # Scheduler store is larger but still safe to back up alongside envs.
+      # Keep its backup next to the py_target_dir so relative restores work,
+      # but ensure the directory is absolute to avoid accidental removal.
       store_backup=$(backup_env_file "$py_target_dir/ampa/scheduler_store.json" "$py_target_dir")
       log_decision "BACKUP_SCHEDULER_STORE=$store_backup"
     fi
