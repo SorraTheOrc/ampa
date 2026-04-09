@@ -628,6 +628,40 @@ class Scheduler:
 
                 def _audit_handler(work_item: dict) -> bool:
                     """Execute descriptor-driven audit lifecycle for one item."""
+                    def _send_audit_notification(
+                        *,
+                        message_type: str,
+                        title_base: str,
+                        work_item_id_local: str,
+                        summary_markdown: str,
+                        full_report_markdown: str,
+                    ) -> None:
+                        """Send audit summary inline plus full report attachment."""
+                        title_with_id_local = f"{title_base} [{work_item_id_local}]"
+                        summary_md = (summary_markdown or "").strip()
+                        full_md_local = (full_report_markdown or "").strip()
+                        if not summary_md:
+                            summary_md = full_md_local or "No audit details available."
+                        if not full_md_local:
+                            full_md_local = summary_md
+
+                        # Keep inline summary readable and under Discord's 2000-char limit.
+                        max_inline_chars = 1800
+                        inline_md = (
+                            summary_md
+                            if len(summary_md) <= max_inline_chars
+                            else summary_md[: max_inline_chars - 3] + "..."
+                        )
+                        content = f"# {title_with_id_local}\n\n```md\n{inline_md}\n```"
+                        attachment = {
+                            "filename": f"audit-{work_item_id_local}.md",
+                            "content": full_md_local,
+                        }
+                        payload = {"content": content, "attachments": [attachment]}
+                        notifications_module.notify(
+                            "", payload=payload, message_type=message_type
+                        )
+
                     work_item_id = str(work_item.get("id") or "")
                     if not work_item_id:
                         LOG.warning("Audit handoff missing work item id")
@@ -646,41 +680,37 @@ class Scheduler:
                             result.details,
                         )
                         try:
-                            # Include work item id in notification title for clarity
                             title_base = work_item.get("title") or work_item_id
-                            title_with_id = f"{title_base} [{work_item_id}]"
-
-                            # Send the audit failure as an inline fenced code
-                            # block for quick visibility and attach the full
-                            # markdown as a `.md` file so operators can open
-                            # the complete report in Discord.
-                            full_md = str(result.details or result.reason or "")
-                            # Prepare a safe inline excerpt (keep well under
-                            # Discord's 2000-char message limit).
-                            excerpt = full_md if len(full_md) <= 1500 else full_md[:1497] + "..."
-                            content = f"```md\n{excerpt}\n```"
-                            attachment = {"filename": f"audit-{work_item_id}.md", "content": full_md}
-                            payload = {"content": content, "attachments": [attachment]}
-                            notifications_module.notify("", payload=payload, message_type="error")
+                            summary_md = str(result.details or result.reason or "")
+                            full_md = str(
+                                (result.metadata or {}).get("audit_report_markdown")
+                                or summary_md
+                            )
+                            _send_audit_notification(
+                                message_type="error",
+                                title_base=title_base,
+                                work_item_id_local=work_item_id,
+                                summary_markdown=summary_md,
+                                full_report_markdown=full_md,
+                            )
                         except Exception:
                             LOG.exception("Failed to send audit failure notification")
                         return False
 
                     try:
-                        # Use the formatted comment text (result.details) when
-                        # available and always append the work item id to the
-                        # title so Discord messages can be traced back easily.
                         title_base = work_item.get("title") or work_item_id
-                        title_with_id = f"{title_base} [{work_item_id}]"
-
-                        # Send the audit summary as an inline fenced code
-                        # block and attach the full markdown as a `.md` file.
-                        full_md = str(result.details or result.reason or "")
-                        excerpt = full_md if len(full_md) <= 1500 else full_md[:1497] + "..."
-                        content = f"```md\n{excerpt}\n```"
-                        attachment = {"filename": f"audit-{work_item_id}.md", "content": full_md}
-                        payload = {"content": content, "attachments": [attachment]}
-                        notifications_module.notify("", payload=payload, message_type="command")
+                        summary_md = str(result.details or result.reason or "")
+                        full_md = str(
+                            (result.metadata or {}).get("audit_report_markdown")
+                            or summary_md
+                        )
+                        _send_audit_notification(
+                            message_type="command",
+                            title_base=title_base,
+                            work_item_id_local=work_item_id,
+                            summary_markdown=summary_md,
+                            full_report_markdown=full_md,
+                        )
                     except Exception:
                         LOG.exception("Failed to send audit summary notification")
 

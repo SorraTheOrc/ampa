@@ -397,6 +397,53 @@ class TestAuditResultHandler:
         assert len(comment_writer.calls) == 1
         assert "AMPA Audit Result" in comment_writer.calls[0]["comment"]
 
+    def test_success_result_details_include_inline_summary(
+        self, descriptor: WorkflowDescriptor, evaluator: InvariantEvaluator
+    ) -> None:
+        handler = self._make_handler(descriptor, evaluator)
+        wi = _make_work_item(status="in_progress", stage="in_review", title="Feature A")
+        result = handler.execute(wi)
+
+        assert result.success is True
+        assert result.reason == "audit_result_recorded"
+        assert "# AMPA Audit Summary" in result.details
+        assert "- Title: Feature A" in result.details
+        assert "- ID: TEST-001" in result.details
+        assert "- Ready to merge (audit): Yes" in result.details
+        assert "- Criteria: 2 met, 0 partial, 0 unmet (2 total)" in result.details
+        assert "audit_report_markdown" in result.metadata
+        assert "# AMPA Audit Result" in result.metadata["audit_report_markdown"]
+
+    def test_no_closure_summary_includes_failed_criteria_details(
+        self, descriptor: WorkflowDescriptor, evaluator: InvariantEvaluator
+    ) -> None:
+        updater = MockUpdater()
+        handler = self._make_handler(
+            descriptor,
+            evaluator,
+            updater=updater,
+            run_shell=_mock_shell_audit(recommends_closure=False),
+        )
+        wi = _make_work_item(
+            status="in_progress",
+            stage="in_review",
+            title="Feature B",
+        )
+        result = handler.execute(wi)
+
+        assert result.success is True
+        assert result.reason == "audit_recommends_no_closure"
+        assert "# AMPA Audit Summary" in result.details
+        assert "- Ready to merge (audit): No" in result.details
+        assert "## Failed acceptance criteria" in result.details
+        assert "[2] Documentation | verdict: unmet | evidence: README missing" in result.details
+        # No state transition when closure is not recommended.
+        assert len(updater.calls) == 0
+        assert "audit_report_markdown" in result.metadata
+        assert "| 2 | Documentation | unmet | README missing |" in result.metadata[
+            "audit_report_markdown"
+        ]
+
     def test_callable_returns_bool(
         self, descriptor: WorkflowDescriptor, evaluator: InvariantEvaluator
     ) -> None:
