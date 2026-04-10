@@ -17,7 +17,7 @@ import os
 import signal
 import subprocess
 import time
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 try:
     import requests  # type: ignore
@@ -119,15 +119,49 @@ def _run_command_with_graceful_timeout(
         )
 
 
-def default_llm_probe(url: str) -> bool:
+def default_llm_probe(url: str, agent: Optional[str] = None) -> bool:
+    return _default_llm_probe_impl(url, agent)
+
+
+def _default_llm_probe_impl(url: str, agent: Optional[str]) -> bool:
     if requests is None:
         LOG.debug("requests missing; assuming LLM unavailable")
         return False
     try:
+        if agent:
+            LOG.debug("Probing LLM endpoint for agent=%s url=%s", agent, url)
         resp = requests.get(url, timeout=2)
         return resp.status_code < 500
     except Exception:
         return False
+
+
+def resolve_llm_probe_target(
+    *,
+    configured_agent: Optional[str],
+    default_agent: str,
+    agent_endpoints: Optional[Dict[str, str]],
+    default_url: str,
+) -> Tuple[str, str]:
+    """Resolve an agent identifier and endpoint URL for LLM probing."""
+    agent = (configured_agent or "").strip() or (default_agent or "").strip() or "Casey"
+    mapping = agent_endpoints or {}
+    endpoint = str(mapping.get(agent) or default_url)
+    return agent, endpoint
+
+
+def is_local_endpoint(url: str) -> bool:
+    lower = (url or "").strip().lower()
+    return (
+        lower.startswith("http://localhost")
+        or lower.startswith("https://localhost")
+        or lower.startswith("http://127.0.0.1")
+        or lower.startswith("https://127.0.0.1")
+        or lower.startswith("http://[::1]")
+        or lower.startswith("https://[::1]")
+        or lower.startswith("unix://")
+        or lower.startswith("http+unix://")
+    )
 
 
 def default_executor(spec: CommandSpec, command_cwd: Optional[str] = None) -> RunResult:

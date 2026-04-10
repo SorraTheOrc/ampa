@@ -59,12 +59,24 @@ Key config knobs (env):
 - AMPA_SCHEDULER_GLOBAL_MIN_INTERVAL_SECONDS: minimum gap between command starts
 - AMPA_SCHEDULER_PRIORITY_WEIGHT: priority multiplier weight
 - AMPA_LLM_HEALTHCHECK_URL: LLM availability probe URL
+- AMPA_DEFAULT_LLM_AGENT: fallback agent name when command omits `agent` (default `Casey`)
+- AMPA_LLM_AGENT_ENDPOINTS: JSON object mapping agent name to endpoint URL
 - AMPA_SCHEDULER_MAX_RUN_HISTORY: number of run history entries to keep
  - AMPA_VERIFY_PR_WITH_GH: when set to 1/true, enable verification of GitHub PR merge status
    via the `gh` CLI before auto-completing work items. Defaults to enabled when not set;
    per-command metadata `verify_pr_with_gh` can override this behavior.
 
 See `ampa/scheduler_schema.md` for the command field schema, store layout, and tuning guidance.
+
+LLM agent mapping example:
+
+```bash
+AMPA_DEFAULT_LLM_AGENT="Casey"
+AMPA_LLM_AGENT_ENDPOINTS='{"Casey":"http://localhost:8000/health","Riley":"http://localhost:8100/health"}'
+```
+
+For commands with `requires_llm=true`, set an optional `agent` field in the
+command spec to choose a mapping key. If omitted, the scheduler uses `Casey`.
 
 Configuration via .env
 

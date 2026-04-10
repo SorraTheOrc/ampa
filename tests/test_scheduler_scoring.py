@@ -149,3 +149,112 @@ def test_scheduler_runs_commands_from_start_cwd(tmp_path):
     assert run is not None
     output = getattr(run, "output", "")
     assert output.strip() == str(tmp_path)
+
+
+def test_scheduler_defaults_llm_agent_to_casey_when_unspecified():
+    now = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
+    scheduler = _make_scheduler(now, llm_available=True)
+    spec = CommandSpec(
+        command_id="llm-default-agent",
+        command="echo llm",
+        requires_llm=True,
+        frequency_minutes=1,
+        priority=1,
+        metadata={},
+        agent=None,
+    )
+    scheduler.store.add_command(spec)
+    scheduler.store.update_state(
+        "auto-delegate", {"last_run_ts": now.isoformat()}
+    )
+    scheduler.store.update_state(
+        "pr-monitor", {"last_run_ts": now.isoformat()}
+    )
+    scheduler.store.update_state(
+        "stale-delegation-watchdog", {"last_run_ts": now.isoformat()}
+    )
+
+    calls = []
+
+    def probe(url, agent):
+        calls.append((url, agent))
+        return True
+
+    scheduler.llm_probe = probe
+
+    selected = scheduler.select_next(now)
+    assert selected is not None
+    assert selected.command_id == "llm-default-agent"
+    assert calls
+    assert calls[0][1] == "Casey"
+
+
+def test_scheduler_resolves_configured_agent_endpoint_for_probe():
+    now = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
+    scheduler = _make_scheduler(now, llm_available=True)
+    scheduler.config = SchedulerConfig(
+        poll_interval_seconds=scheduler.config.poll_interval_seconds,
+        global_min_interval_seconds=scheduler.config.global_min_interval_seconds,
+        priority_weight=scheduler.config.priority_weight,
+        store_path=scheduler.config.store_path,
+        llm_healthcheck_url=scheduler.config.llm_healthcheck_url,
+        max_run_history=scheduler.config.max_run_history,
+        container_dispatch_timeout_seconds=scheduler.config.container_dispatch_timeout_seconds,
+        default_llm_agent="Casey",
+        llm_agent_endpoints={
+            "Casey": "http://localhost:8100/health",
+            "Riley": "https://llm.example.com/health",
+        },
+    )
+    spec = CommandSpec(
+        command_id="llm-riley",
+        command="echo llm",
+        requires_llm=True,
+        frequency_minutes=1,
+        priority=1,
+        metadata={},
+        agent="Riley",
+    )
+
+    agent, endpoint = scheduler._resolve_llm_probe_target(spec)
+    assert agent == "Riley"
+    assert endpoint == "https://llm.example.com/health"
+
+    calls = []
+
+    def probe(url, agent_name):
+        calls.append((url, agent_name))
+        return True
+
+    scheduler.llm_probe = probe
+    assert scheduler._llm_available_for_spec(spec) is True
+    assert calls == [("https://llm.example.com/health", "Riley")]
+
+
+def test_scheduler_warns_when_agent_endpoint_is_non_local(caplog):
+    now = dt.datetime(2026, 1, 1, tzinfo=dt.timezone.utc)
+    scheduler = _make_scheduler(now, llm_available=True)
+    scheduler.config = SchedulerConfig(
+        poll_interval_seconds=scheduler.config.poll_interval_seconds,
+        global_min_interval_seconds=scheduler.config.global_min_interval_seconds,
+        priority_weight=scheduler.config.priority_weight,
+        store_path=scheduler.config.store_path,
+        llm_healthcheck_url=scheduler.config.llm_healthcheck_url,
+        max_run_history=scheduler.config.max_run_history,
+        container_dispatch_timeout_seconds=scheduler.config.container_dispatch_timeout_seconds,
+        default_llm_agent="Casey",
+        llm_agent_endpoints={"Casey": "https://remote.example.com/health"},
+    )
+    spec = CommandSpec(
+        command_id="llm-casey",
+        command="echo llm",
+        requires_llm=True,
+        frequency_minutes=1,
+        priority=1,
+        metadata={},
+        agent=None,
+    )
+
+    caplog.set_level("WARNING", logger="ampa.scheduler")
+    scheduler._resolve_llm_probe_target(spec)
+    assert "Resolved non-local LLM endpoint" in caplog.text

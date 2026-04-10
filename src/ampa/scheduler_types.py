@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime as dt
+import json
 import logging
 import os
 from typing import Any, Dict, Optional
@@ -96,6 +97,7 @@ class CommandSpec:
     title: Optional[str] = None
     max_runtime_minutes: Optional[int] = None
     command_type: str = "shell"
+    agent: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -108,6 +110,7 @@ class CommandSpec:
             "metadata": self.metadata,
             "max_runtime_minutes": self.max_runtime_minutes,
             "type": self.command_type,
+            "agent": self.agent,
         }
 
     @staticmethod
@@ -122,6 +125,7 @@ class CommandSpec:
             title=data.get("title"),
             max_runtime_minutes=data.get("max_runtime_minutes"),
             command_type=str(data.get("type", "shell")),
+            agent=data.get("agent"),
         )
 
 
@@ -137,6 +141,8 @@ class SchedulerConfig:
     # compatibility for callers/tests that instantiate SchedulerConfig
     # without this value.
     container_dispatch_timeout_seconds: int = 240
+    default_llm_agent: str = "Casey"
+    llm_agent_endpoints: Dict[str, str] = dataclasses.field(default_factory=dict)
 
     @staticmethod
     def from_env() -> "SchedulerConfig":
@@ -162,12 +168,41 @@ class SchedulerConfig:
                 LOG.warning("Invalid %s=%r; using %s", name, raw, default)
                 return default
 
+        def _json_obj(name: str) -> Dict[str, str]:
+            raw = os.getenv(name, "").strip()
+            if not raw:
+                return {}
+            try:
+                parsed = json.loads(raw)
+            except Exception:
+                LOG.warning("Invalid %s JSON; using empty mapping", name)
+                return {}
+            if not isinstance(parsed, dict):
+                LOG.warning("Invalid %s (expected JSON object); using empty mapping", name)
+                return {}
+            cleaned: Dict[str, str] = {}
+            for key, value in parsed.items():
+                if not isinstance(key, str) or not isinstance(value, str):
+                    continue
+                k = key.strip()
+                v = value.strip()
+                if not k or not v:
+                    continue
+                cleaned[k] = v
+            return cleaned
+
         # The scheduler store MUST exist at the local per-project path.
         # The daemon is spawned with cwd=projectRoot (ampa.mjs) so
         # os.getcwd() gives the correct project root at startup.
         store_path = os.path.join(
             os.getcwd(), ".worklog", "ampa", "scheduler_store.json"
         )
+        llm_healthcheck_url = os.getenv(
+            "AMPA_LLM_HEALTHCHECK_URL", "http://localhost:8000/health"
+        )
+        default_llm_agent = os.getenv("AMPA_DEFAULT_LLM_AGENT", "Casey").strip() or "Casey"
+        llm_agent_endpoints = _json_obj("AMPA_LLM_AGENT_ENDPOINTS")
+        llm_agent_endpoints.setdefault(default_llm_agent, llm_healthcheck_url)
         return SchedulerConfig(
             poll_interval_seconds=_int("AMPA_SCHEDULER_POLL_INTERVAL_SECONDS", 5),
             global_min_interval_seconds=_int(
@@ -175,13 +210,13 @@ class SchedulerConfig:
             ),
             priority_weight=_float("AMPA_SCHEDULER_PRIORITY_WEIGHT", 0.1),
             store_path=store_path,
-            llm_healthcheck_url=os.getenv(
-                "AMPA_LLM_HEALTHCHECK_URL", "http://localhost:8000/health"
-            ),
+            llm_healthcheck_url=llm_healthcheck_url,
             max_run_history=_int("AMPA_SCHEDULER_MAX_RUN_HISTORY", 50),
             container_dispatch_timeout_seconds=_int(
                 "AMPA_CONTAINER_DISPATCH_TIMEOUT", 240
             ),
+            default_llm_agent=default_llm_agent,
+            llm_agent_endpoints=llm_agent_endpoints,
         )
 
 
