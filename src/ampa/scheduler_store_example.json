@@ -70,6 +70,7 @@
       "command": "true",
       "frequency_minutes": 2,
       "id": "wl-audit",
+      "agent": "Casey",
       "title": "Audit",
       "max_runtime_minutes": 5,
       "metadata": {

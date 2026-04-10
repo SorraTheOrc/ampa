@@ -246,6 +246,7 @@ def test_format_command_detail_basic():
     assert detail["id"] == "test-cmd"
     assert detail["name"] == "Test Command"
     assert detail["type"] == "shell"
+    assert detail["agent"] is None
     assert detail["frequency_minutes"] == 10
     assert detail["running"] is False
     assert detail["last_exit_code"] == 0
@@ -314,6 +315,7 @@ def test_format_details_table_full():
             "name": "Command One",
             "description": "Test",
             "type": "shell",
+            "agent": "Casey",
             "frequency_minutes": 10,
             "priority": 5,
             "requires_llm": False,
@@ -325,6 +327,8 @@ def test_format_details_table_full():
     ]
     text = _format_command_details_table(details, "full")
     assert "Type:" in text
+    assert "Agent:" in text
+    assert "Casey" in text
     assert "Frequency:" in text
     assert "Priority:" in text
     assert "Requires LLM:" in text

@@ -9,6 +9,7 @@ Each scheduled command is represented by a `CommandSpec` entry.
 - `id` (string, required): unique command identifier.
 - `command` (string, required): shell command executed by the scheduler (except for `type: heartbeat`).
 - `requires_llm` (boolean, required): true if the command requires an LLM server.
+- `agent` (string, optional): named agent identifier used to resolve an LLM endpoint mapping. If omitted, AMPA uses the default agent (`Casey`).
 - `frequency_minutes` (int > 0, required): desired minimum interval between runs.
 - `priority` (int, required): higher numbers increase scheduling weight.
 - `metadata` (object, optional): arbitrary metadata for operators.
@@ -22,6 +23,8 @@ Each scheduled command is represented by a `CommandSpec` entry.
 - `AMPA_SCHEDULER_GLOBAL_MIN_INTERVAL_SECONDS`: global minimum interval between command starts (default: 60).
 - `AMPA_SCHEDULER_PRIORITY_WEIGHT`: priority multiplier weight (default: 0.1).
 - `AMPA_LLM_HEALTHCHECK_URL`: HTTP endpoint for LLM availability (default: `http://localhost:8000/health`).
+- `AMPA_DEFAULT_LLM_AGENT`: fallback agent name when a command omits `agent` (default: `Casey`).
+- `AMPA_LLM_AGENT_ENDPOINTS`: JSON object mapping agent name to endpoint URL, for example `{"Casey":"http://localhost:8000/health","Riley":"http://localhost:8100/health"}`.
 - `AMPA_SCHEDULER_MAX_RUN_HISTORY`: number of runs retained per command (default: 50).
 
 Scheduled shell commands run in the working directory where the scheduler daemon was started.
@@ -44,6 +47,7 @@ The store is a JSON file with the following top-level structure (see `ampa/sched
       "id": "cmd-1",
       "command": "python -m ...",
       "requires_llm": false,
+      "agent": "Casey",
       "frequency_minutes": 10,
       "priority": 2,
       "metadata": {},

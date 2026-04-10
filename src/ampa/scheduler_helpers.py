@@ -98,6 +98,7 @@ def ensure_watchdog_command(store: SchedulerStore) -> None:
             title="Stale Delegation Watchdog",
             max_runtime_minutes=5,
             command_type="stale-delegation-watchdog",
+            agent=None,
         )
         store.add_command(watchdog_spec)
         LOG.info(
@@ -139,6 +140,7 @@ def ensure_auto_delegate_command(store: SchedulerStore) -> None:
             title="Auto Delegate",
             max_runtime_minutes=5,
             command_type="auto-delegate",
+            agent=None,
         )
         store.add_command(auto_delegate_spec)
         LOG.info(
@@ -175,6 +177,7 @@ def ensure_pr_monitor_command(store: SchedulerStore) -> None:
             title="PR Monitor",
             max_runtime_minutes=10,
             command_type="pr-monitor",
+            agent=None,
         )
         store.add_command(pr_monitor_spec)
         LOG.info(
@@ -223,6 +226,7 @@ def ensure_audit_command(store: SchedulerStore) -> None:
             title="Audit",
             max_runtime_minutes=5,
             command_type="audit",
+            agent=None,
         )
         store.add_command(audit_spec)
         LOG.info(

@@ -60,6 +60,8 @@ from .scheduler_store import SchedulerStore  # noqa: E402
 from .scheduler_executor import (  # noqa: E402
     default_llm_probe,
     default_executor,
+    is_local_endpoint,
+    resolve_llm_probe_target,
     score_command,
 )
 
@@ -89,7 +91,7 @@ class Scheduler:
         self,
         store: SchedulerStore,
         config: SchedulerConfig,
-        llm_probe: Optional[Callable[[str], bool]] = None,
+        llm_probe: Optional[Callable[..., bool]] = None,
         executor: Optional[Callable[[CommandSpec], RunResult]] = None,
         command_cwd: Optional[str] = None,
         run_shell: Optional[Callable[..., subprocess.CompletedProcess]] = None,
@@ -282,6 +284,53 @@ class Scheduler:
         orch._notifications_module = notifications_module
         orch._selection_module = selection
 
+    def _effective_llm_agent(self, spec: CommandSpec) -> str:
+        configured = (getattr(spec, "agent", None) or "").strip()
+        if configured:
+            return configured
+        default_agent = (
+            getattr(self.config, "default_llm_agent", "Casey") or "Casey"
+        ).strip()
+        return default_agent or "Casey"
+
+    def _resolve_llm_probe_endpoint(self, spec: CommandSpec, agent: str) -> str:
+        _resolved_agent, endpoint = resolve_llm_probe_target(
+            configured_agent=agent,
+            default_agent=(getattr(self.config, "default_llm_agent", "Casey") or "Casey"),
+            agent_endpoints=(getattr(self.config, "llm_agent_endpoints", {}) or {}),
+            default_url=self.config.llm_healthcheck_url,
+        )
+        if not is_local_endpoint(endpoint):
+            LOG.warning(
+                "Resolved non-local LLM endpoint for command_id=%s agent=%s endpoint=%s",
+                spec.command_id,
+                agent,
+                endpoint,
+            )
+        return endpoint
+
+    def _probe_llm(self, url: str, agent: Optional[str]) -> bool:
+        try:
+            if agent:
+                try:
+                    return bool(self.llm_probe(url, agent))
+                except TypeError:
+                    return bool(self.llm_probe(url))
+            return bool(self.llm_probe(url))
+        except Exception:
+            LOG.debug("LLM probe failed for url=%s agent=%s", url, agent, exc_info=True)
+            return False
+
+    def _llm_available_for_spec(self, spec: CommandSpec) -> bool:
+        agent = self._effective_llm_agent(spec)
+        endpoint = self._resolve_llm_probe_endpoint(spec, agent)
+        return self._probe_llm(endpoint, agent)
+
+    def _resolve_llm_probe_target(self, spec: CommandSpec) -> Tuple[str, str]:
+        agent = self._effective_llm_agent(spec)
+        endpoint = self._resolve_llm_probe_endpoint(spec, agent)
+        return agent, endpoint
+
     def _global_rate_limited(self, now: dt.datetime) -> bool:
         last_start = self.store.last_global_start()
         if last_start is None:
@@ -292,14 +341,20 @@ class Scheduler:
         return since < self.config.global_min_interval_seconds
 
     def _eligible_commands(
-        self, commands: Iterable[CommandSpec], llm_available: bool
+        self,
+        commands: Iterable[CommandSpec],
+        llm_available: Optional[bool] = None,
     ) -> List[CommandSpec]:
         eligible = []
         for spec in commands:
             if spec.frequency_minutes <= 0:
                 continue
-            if spec.requires_llm and not llm_available:
-                continue
+            if spec.requires_llm:
+                if llm_available is None:
+                    if not self._llm_available_for_spec(spec):
+                        continue
+                elif not llm_available:
+                    continue
             state = self.store.get_state(spec.command_id)
             if state.get("running") is True:
                 continue
@@ -313,8 +368,7 @@ class Scheduler:
         commands = self.store.list_commands()
         if not commands:
             return None
-        llm_available = self.llm_probe(self.config.llm_healthcheck_url)
-        eligible = self._eligible_commands(commands, llm_available)
+        eligible = self._eligible_commands(commands)
         if not eligible:
             return None
         scored: List[Tuple[float, float, CommandSpec]] = []

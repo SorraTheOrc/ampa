@@ -31,6 +31,7 @@ def test_build_command_listing_formats_runs():
     row = rows[0]
     assert row["id"] == "cmd"
     assert row["name"] == "Example"
+    assert row["agent"] is None
     assert row["last_run"] == last_run.isoformat()
     assert row["next_run"] == (last_run + dt.timedelta(minutes=10)).isoformat()
 

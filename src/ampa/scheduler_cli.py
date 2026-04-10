@@ -141,6 +141,7 @@ def _build_command_listing(
                 "id": spec.command_id,
                 "name": spec.title or spec.command_id,
                 "description": _command_description(spec),
+                "agent": spec.agent,
                 "last_run": _to_iso(last_run),
                 "next_run": _to_iso(next_run),
                 # Expose running state for callers that want to partition
@@ -279,6 +280,7 @@ def _cli_add(args: argparse.Namespace) -> int:
         metadata=_parse_metadata(args.metadata),
         max_runtime_minutes=args.max_runtime_minutes,
         command_type=args.command_type,
+        agent=getattr(args, "agent", None),
     )
     store.add_command(spec)
     return 0
@@ -296,6 +298,7 @@ def _cli_update(args: argparse.Namespace) -> int:
         metadata=_parse_metadata(args.metadata),
         max_runtime_minutes=args.max_runtime_minutes,
         command_type=args.command_type,
+        agent=getattr(args, "agent", None),
     )
     store.update_command(spec)
     return 0
@@ -495,6 +498,7 @@ def _format_command_detail(
         "name": spec.title or spec.command_id,
         "description": _command_description(spec),
         "type": spec.command_type,
+        "agent": spec.agent,
         "frequency_minutes": spec.frequency_minutes,
         "priority": spec.priority,
         "requires_llm": spec.requires_llm,
@@ -552,6 +556,7 @@ def _format_command_details_table(details: List[Dict[str, Any]], fmt: str) -> st
         lines.append(f"  Next run:    {next_run}")
         if fmt == "full":
             lines.append(f"  Type:        {d.get('type', 'shell')}")
+            lines.append(f"  Agent:       {d.get('agent') or '(default)'}")
             lines.append(f"  Frequency:   {d.get('frequency_minutes', 0)}m")
             lines.append(f"  Priority:    {d.get('priority', 0)}")
             lines.append(f"  Requires LLM: {d.get('requires_llm', False)}")
@@ -707,6 +712,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add.add_argument("--max-runtime-minutes", type=int, dest="max_runtime_minutes")
     add.add_argument("--type", dest="command_type", default="shell")
     add.add_argument("--title")
+    add.add_argument("--agent", default=None)
 
     update = sub.add_parser("update", help="Update a scheduled command")
     update.add_argument("command_id")
@@ -718,6 +724,7 @@ def _build_parser() -> argparse.ArgumentParser:
     update.add_argument("--max-runtime-minutes", type=int, dest="max_runtime_minutes")
     update.add_argument("--type", dest="command_type", default="shell")
     update.add_argument("--title")
+    update.add_argument("--agent", default=None)
 
     remove = sub.add_parser("remove", help="Remove a scheduled command")
     remove.add_argument("command_id")
@@ -849,6 +856,7 @@ def _cli_config(args: argparse.Namespace) -> int:
         title=spec.title,
         max_runtime_minutes=spec.max_runtime_minutes,
         command_type=spec.command_type,
+        agent=spec.agent,
     )
     store.update_command(spec)
     print(f"Set auto_assign_enabled={normalized} on command 'delegation'")
