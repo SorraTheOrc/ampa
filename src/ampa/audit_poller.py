@@ -21,6 +21,8 @@ from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checka
 
 LOG = logging.getLogger("ampa.audit_poller")
 
+INVALID_FROM_STATE_BACKOFF_THRESHOLD = 3
+
 
 # ---------------------------------------------------------------------------
 # Result types
@@ -481,6 +483,31 @@ def poll_and_handoff(
 
     # 4. Filter by cooldown
     eligible = _filter_by_cooldown(candidates, last_audit_by_item, cooldown_hours, now)
+
+    # Exclude items that have repeatedly failed due to invalid_from_state
+    # to avoid noisy selection loops. The store keeps a per-item counter
+    # under the key "invalid_from_state_count_by_item" which is incremented
+    # when handlers report an invalid_from_state failure. Skip candidates
+    # whose counter has reached the backoff threshold.
+    invalid_counts = state.get("invalid_from_state_count_by_item", {}) or {}
+    if isinstance(invalid_counts, dict):
+        filtered = []
+        for it in eligible:
+            wid = str(it.get("id") or "")
+            try:
+                count = int(invalid_counts.get(wid, 0))
+            except Exception:
+                count = 0
+            if count >= INVALID_FROM_STATE_BACKOFF_THRESHOLD:
+                LOG.info(
+                    "Audit poller: skipping candidate %s due to %s invalid_from_state failures",
+                    wid,
+                    count,
+                )
+                continue
+            filtered.append(it)
+        eligible = filtered
+
     if not eligible:
         LOG.info("Audit poller: no candidates after cooldown filter")
         return PollerResult(outcome=PollerOutcome.no_candidates)
@@ -519,6 +546,34 @@ def poll_and_handoff(
                 payload = json.loads(proc.stdout)
                 # Work item may be wrapped under 'workItem' — normalize
                 wi = payload.get("workItem") or payload
+                # Log a compact view of the prefetch payload and the
+                # original selected payload (from `wl list`) to make it
+                # easier to correlate differences that lead to
+                # invalid_from_state failures during handler execution.
+                try:
+                    sel_compact = json.dumps({
+                        "id": selected.get("id"),
+                        "status": selected.get("status"),
+                        "stage": selected.get("stage"),
+                        "updated": selected.get("updatedAt") or selected.get("updated_at"),
+                    }, default=str)
+                except Exception:
+                    sel_compact = str(selected.get("id"))
+                try:
+                    wi_compact = json.dumps({
+                        "id": wi.get("id"),
+                        "status": wi.get("status"),
+                        "stage": wi.get("stage"),
+                        "updated": wi.get("updatedAt") or wi.get("updated_at"),
+                    }, default=str)
+                except Exception:
+                    wi_compact = str(wi.get("id"))
+
+                LOG.debug(
+                    "Audit poller: candidate prefetch (selected=%s) fetched=%s",
+                    sel_compact,
+                    wi_compact,
+                )
                 # Prioritise the work item's stage as the authoritative signal
                 # for audit eligibility. Some backends return inconsistent
                 # (status, stage) pairs (e.g. status=completed with
@@ -563,8 +618,27 @@ def poll_and_handoff(
     # Record a per-item last_attempt_at for observability regardless of
     # success; update last_audit_at only when the handler indicates
     # success by returning a truthy value.
+    # Prefer calling handler.execute(...) when available so we can inspect
+    # structured failure reasons (HandlerResult) and react to
+    # invalid_from_state failures by updating a per-item counter in the
+    # store. Fall back to the simple boolean __call__ interface otherwise.
+    success = False
+    handler_result_reason = None
     try:
-        success = bool(handler(selected))
+        if hasattr(handler, "execute"):
+            # execute(...) typically returns a HandlerResult-like object
+            res = handler.execute(selected)
+            # Accept both dataclass-like and dict-like results
+            if hasattr(res, "success"):
+                success = bool(getattr(res, "success"))
+                handler_result_reason = getattr(res, "reason", None)
+            elif isinstance(res, dict):
+                success = bool(res.get("success"))
+                handler_result_reason = res.get("reason")
+            else:
+                success = bool(res)
+        else:
+            success = bool(handler(selected))
     except Exception:
         LOG.exception("Audit handler raised for %s", work_id)
         success = False
@@ -574,8 +648,28 @@ def poll_and_handoff(
         state.setdefault("last_attempt_at_by_item", {})
         state["last_attempt_at_by_item"][work_id] = now.isoformat()
         if success:
+            # Clear any previous invalid_from_state counters on success
+            invalid_counts = state.get("invalid_from_state_count_by_item") or {}
+            if isinstance(invalid_counts, dict) and work_id in invalid_counts:
+                try:
+                    invalid_counts.pop(work_id, None)
+                except Exception:
+                    pass
+                state["invalid_from_state_count_by_item"] = invalid_counts
+
             state.setdefault("last_audit_at_by_item", {})
             state["last_audit_at_by_item"][work_id] = now.isoformat()
+        else:
+            # If the handler failed and reported an invalid_from_state
+            # reason, increment the per-item counter so we can backoff
+            # selection in future cycles.
+            if handler_result_reason == "invalid_from_state":
+                state.setdefault("invalid_from_state_count_by_item", {})
+                try:
+                    prev = int(state["invalid_from_state_count_by_item"].get(work_id, 0))
+                except Exception:
+                    prev = 0
+                state["invalid_from_state_count_by_item"][work_id] = prev + 1
         store.update_state(spec.command_id, state)
     except Exception:
         LOG.exception(

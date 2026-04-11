@@ -308,6 +308,7 @@ class Engine:
     def process_delegation(
         self,
         work_item_id: str | None = None,
+        agent_hint: str | None = None,
     ) -> EngineResult:
         """Process a delegation through the 4-step lifecycle.
 
@@ -572,7 +573,12 @@ class Engine:
                 timestamp=ts,
             )
 
-        command_str = template.format(id=work_item_id)
+        # Allow dispatch templates to reference the scheduling-time agent
+        # via the {agent} placeholder. Supply an empty string when no
+        # agent_hint is provided so templates that include {agent} don't
+        # receive the string 'None'. This is backward-compatible: existing
+        # templates that only use {id} continue to work.
+        command_str = template.format(id=work_item_id, agent=agent_hint or "")
 
         # Dispatch
         dispatch_result = self._dispatcher.dispatch(
@@ -610,6 +616,11 @@ class Engine:
             "timestamp": dispatch_result.timestamp.isoformat(),
             "status": "dispatched",
         }
+        # Record the agent that was used to build the dispatch command when
+        # one was supplied. This makes it easier to audit which agent name
+        # the scheduler intended for the run.
+        if agent_hint:
+            dispatch_record["agent"] = agent_hint
         record_id = self._recorder.record_dispatch(dispatch_record)
         if record_id:
             dispatch_record["id"] = record_id

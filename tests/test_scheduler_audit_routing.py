@@ -145,6 +145,15 @@ def test_scheduler_audit_routes_to_descriptor_handlers(tmp_path, monkeypatch):
     assert any(c.startswith(f"wl update {work_id}") and ("--stage done" in c) for c in calls)
     assert any(c.startswith("gh pr view 42 --repo example/repo --json merged") for c in calls)
 
+    # Verify the audit file was persisted under the scheduler working dir
+    audit_dir = tmp_path / ".worklog" / "audit"
+    files = list(audit_dir.glob(f"audit-{work_id}-*.md")) if audit_dir.exists() else []
+    assert len(files) == 1, f"expected one persisted audit file, found: {files}"
+    # Ensure notification payload included the saved path by checking log of calls
+    # The fake_run_shell does not capture notify payload; instead ensure file contains expected content
+    content = files[0].read_text()
+    assert "Can this item be closed? Yes." in content
+
 
 def test_scheduler_audit_query_failure_is_graceful(tmp_path):
     def fake_run_shell(cmd, **kwargs):

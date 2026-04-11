@@ -41,7 +41,7 @@ import os
 import re
 import subprocess
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Sequence
 
 from ampa.audit.result import AuditResult, ParseError, parse_audit_output
@@ -73,6 +73,7 @@ class HandlerResult:
     command: str = ""
     work_item_id: str = ""
     details: str = ""
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +239,73 @@ def _format_audit_comment(audit_result: AuditResult) -> str:
             parts.append("Can this item be closed? No.")
 
     return "\n".join(parts)
+
+
+def _format_audit_discord_summary(
+    work_item_title: str,
+    work_item_id: str,
+    audit_result: AuditResult,
+) -> str:
+    """Format a concise Discord-first audit summary.
+
+    Includes work item identity, ready-to-close status, criteria counts,
+    and explicit failed acceptance-criteria lines when present.
+    """
+    criteria = list(audit_result.acceptance_criteria)
+    total = len(criteria)
+    met = sum(1 for c in criteria if c.verdict == "met")
+    partial = sum(1 for c in criteria if c.verdict == "partial")
+    unmet = sum(1 for c in criteria if c.verdict not in {"met", "partial"})
+
+    title = work_item_title or work_item_id
+    # Use an explicit Ready-to-close single-line token so it's easy to
+    # grep/scan in Discord.
+    ready_value = "YES" if audit_result.recommends_closure else "NO"
+    lines = [
+        "# AMPA Audit Summary",
+        "",
+        f"- Title: {title}",
+        f"- ID: {work_item_id}",
+        f"- Ready to close: {ready_value}",
+        f"- Criteria: {met} met, {partial} partial, {unmet} unmet ({total} total)",
+    ]
+
+    if audit_result.summary:
+        lines.extend(["", "## Findings", "", audit_result.summary.strip()])
+
+    failed = [c for c in criteria if c.verdict != "met"]
+    if failed:
+        lines.extend(["", "## Failed acceptance criteria", ""])
+        for c in failed:
+            criterion = c.criterion.strip() or "(no criterion text)"
+            evidence = c.evidence.strip() or "No evidence provided."
+            verdict = c.verdict.strip() or "unknown"
+            lines.append(
+                f"- [{c.number}] {criterion} | verdict: {verdict} | evidence: {evidence}"
+            )
+
+    # Recommendation / missing actions paragraph. Prefer closure_reason when
+    # available, otherwise synthesize a short missing-actions sentence.
+    recommendation = (audit_result.closure_reason or "").strip()
+    if audit_result.recommends_closure:
+        if recommendation:
+            lines.extend(["", "## Recommendation", "", recommendation])
+        else:
+            lines.extend(["", "## Recommendation", "", "Can this item be closed? Yes."])
+    else:
+        if recommendation:
+            missing = recommendation
+        else:
+            failed_small = [c for c in criteria if c.verdict != "met"]
+            if failed_small:
+                brief = "; ".join(f"[{c.number}] {c.criterion.strip()}" for c in failed_small[:3])
+                missing = f"Missing actions: {brief}."
+            else:
+                missing = "Missing actions: audit indicates unmet acceptance criteria."
+
+        lines.extend(["", "## Recommendation", "", missing])
+
+    return "\n".join(lines)
 
 
 def _apply_tags(
@@ -432,8 +500,15 @@ class AuditResultHandler:
             )
 
         # Step 3: Post structured comment (before invariant check,
-        # since the invariant checks for the comment's existence)
+        # since the invariant checks for the comment's existence). We
+        # also build a concise Discord-first summary (returned in
+        # HandlerResult.details) while preserving the full AMPA audit
+        # report markdown in metadata so callers can attach it.
         comment_text = _format_audit_comment(audit_result)
+        discord_summary = _format_audit_discord_summary(
+            _get_work_item_title(work_item), work_item_id, audit_result
+        )
+
         comment_ok = self._comment_writer.write_comment(
             work_item_id, comment_text, author="ampa-scheduler"
         )
@@ -470,18 +545,18 @@ class AuditResultHandler:
                     details=inv_result.summary(),
                 )
 
-        # Step 6: If audit does not recommend closure, do not transition here.
-        # The caller can route to the audit_fail command while item is still in
-        # review state. Include the formatted audit comment text in the
-        # HandlerResult.details so callers (e.g. scheduler) can surface the
-        # full report in notifications (Discord) or logs.
+        # Step 6: If audit does not recommend closure, do not transition
+        # here. Return a concise summary in `details` for quick Discord
+        # inline posting and include the full AMPA audit markdown under
+        # `metadata.audit_report_markdown` so callers can attach it.
         if not audit_result.recommends_closure:
             return HandlerResult(
                 success=True,
                 reason="audit_recommends_no_closure",
                 command="audit_result",
                 work_item_id=work_item_id,
-                details=comment_text,
+                details=discord_summary,
+                metadata={"audit_report_markdown": comment_text},
             )
 
         # Step 7: Apply state transition to audit_passed
@@ -517,10 +592,8 @@ class AuditResultHandler:
             reason="audit_result_recorded",
             command="audit_result",
             work_item_id=work_item_id,
-            details=(
-                f"recommends_closure={audit_result.recommends_closure}, "
-                f"criteria={len(audit_result.acceptance_criteria)}"
-            ),
+            details=discord_summary,
+            metadata={"audit_report_markdown": comment_text},
         )
 
     def _run_audit(self, work_item_id: str) -> AuditResult | ParseError:

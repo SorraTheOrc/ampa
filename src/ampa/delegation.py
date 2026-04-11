@@ -424,7 +424,14 @@ class DelegationOrchestrator:
             }
 
         try:
-            result = self.engine.process_delegation()
+            # Pass the scheduled command's agent (if present) through to
+            # the engine so dispatch templates can reference {agent}.
+            agent_hint = None
+            try:
+                agent_hint = spec.agent if hasattr(spec, "agent") else None
+            except Exception:
+                agent_hint = None
+            result = self.engine.process_delegation(agent_hint=agent_hint)
         except Exception:
             LOG.exception("Engine process_delegation raised an exception")
             return {
