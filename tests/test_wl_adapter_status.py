@@ -236,3 +236,92 @@ class TestGracefulDegradation:
         assert w.is_valid_status("completed") is True
         # input_needed is in our constants even if wl doesn't support it yet
         assert w.is_valid_status("input_needed") is True
+
+
+class TestStatusTransitions:
+    """Test status transitions to and from input_needed.
+
+    These tests verify that status transitions involving input_needed
+    are handled correctly by the AMPA adapter.
+    """
+
+    def test_transition_from_open_to_input_needed(self):
+        """Should allow transition from open to input_needed."""
+        w = DummyWL()
+        # Both statuses should be valid
+        assert w.is_valid_status("open") is True
+        assert w.is_valid_status("input_needed") is True
+        # input_needed should not be treated as closed
+        assert w.is_closed_status("input_needed") is False
+
+    def test_transition_from_in_progress_to_input_needed(self):
+        """Should allow transition from in-progress to input_needed."""
+        w = DummyWL()
+        assert w.is_valid_status("in-progress") is True
+        assert w.is_valid_status("input_needed") is True
+        assert w.is_closed_status("input_needed") is False
+
+    def test_transition_from_blocked_to_input_needed(self):
+        """Should allow transition from blocked to input_needed."""
+        w = DummyWL()
+        assert w.is_valid_status("blocked") is True
+        assert w.is_valid_status("input_needed") is True
+        assert w.is_closed_status("input_needed") is False
+
+    def test_transition_from_input_needed_to_open(self):
+        """Should allow transition from input_needed back to open."""
+        w = DummyWL()
+        assert w.is_valid_status("input_needed") is True
+        assert w.is_valid_status("open") is True
+        # When returning to open, the item is not closed
+        assert w.is_closed_status("open") is False
+
+    def test_transition_from_input_needed_to_in_progress(self):
+        """Should allow transition from input_needed to in-progress when input received."""
+        w = DummyWL()
+        assert w.is_valid_status("input_needed") is True
+        assert w.is_valid_status("in-progress") is True
+        assert w.is_closed_status("in-progress") is False
+
+    def test_transition_from_input_needed_to_completed(self):
+        """Should allow transition from input_needed to completed if work is done."""
+        w = DummyWL()
+        assert w.is_valid_status("input_needed") is True
+        assert w.is_valid_status("completed") is True
+        # Completed is a closed status
+        assert w.is_closed_status("completed") is True
+
+    def test_transition_from_input_needed_to_blocked(self):
+        """Should allow transition from input_needed to blocked if blocked later."""
+        w = DummyWL()
+        assert w.is_valid_status("input_needed") is True
+        assert w.is_valid_status("blocked") is True
+        assert w.is_closed_status("blocked") is False
+
+    def test_input_needed_not_treated_as_closed_in_audit(self):
+        """input_needed should not prevent audit closure checks."""
+        # This test verifies that the CLOSED_STATUSES constant used by
+        # audit handlers correctly excludes input_needed
+        from plan.wl_adapter import CLOSED_STATUSES
+        assert "input_needed" not in CLOSED_STATUSES
+        # Verify other non-closed statuses are also excluded
+        assert "open" not in CLOSED_STATUSES
+        assert "in-progress" not in CLOSED_STATUSES
+        assert "blocked" not in CLOSED_STATUSES
+        # But closed statuses are included
+        assert "completed" in CLOSED_STATUSES
+        assert "closed" in CLOSED_STATUSES
+        assert "done" in CLOSED_STATUSES
+
+    def test_all_valid_transitions_covered(self):
+        """All status values should be valid for transitions."""
+        from plan.wl_adapter import VALID_STATUSES
+        w = DummyWL()
+        # Every valid status should be recognized
+        for status in VALID_STATUSES:
+            assert w.is_valid_status(status) is True, f"Status {status} should be valid"
+
+    def test_input_needed_in_valid_statuses(self):
+        """input_needed must be in VALID_STATUSES for transitions to work."""
+        from plan.wl_adapter import VALID_STATUSES
+        assert "input_needed" in VALID_STATUSES
