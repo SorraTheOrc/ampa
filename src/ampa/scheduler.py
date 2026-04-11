@@ -80,6 +80,7 @@ from .scheduler_helpers import (  # noqa: E402
     ensure_auto_delegate_command as _ensure_auto_delegate_command,
     ensure_pr_monitor_command as _ensure_pr_monitor_command,
     ensure_audit_command as _ensure_audit_command,
+    ensure_intake_command as _ensure_intake_command,
     log_health as _log_health,
 )
 
@@ -256,6 +257,10 @@ class Scheduler:
         # posts "ready for review" when CI passes, and creates critical
         # work items when CI fails.
         _ensure_pr_monitor_command(self.store)
+
+        # Auto-register the intake selector command which periodically
+        # queries Worklog for idea-stage items and selects a candidate.
+        _ensure_intake_command(self.store)
 
         # --- Discord bot process supervision ---
         self._bot_supervisor = BotSupervisor(
@@ -771,6 +776,16 @@ class Scheduler:
             except Exception:
                 LOG.exception("Failed to run audit poller / descriptor handlers")
             # audit posts its own discord summary; avoid generic post
+            return run
+        if spec.command_id == "intake-selector" or spec.command_type == "intake":
+            try:
+                from .intake_runner import IntakeRunner
+
+                runner = IntakeRunner(run_shell=self.run_shell, command_cwd=self.command_cwd)
+                result = runner.run(spec, self.store)
+                LOG.info("intake result: %s", result)
+            except Exception:
+                LOG.exception("intake-selector command failed")
             return run
         if spec.command_type == "stale-delegation-watchdog":
             try:
