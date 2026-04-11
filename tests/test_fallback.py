@@ -700,6 +700,10 @@ def _post_json(url, payload):
 @pytest.fixture()
 def _metrics_fixture(monkeypatch):
     """Start the AMPA server; yield a factory that returns (base_url, server)."""
+    import time
+    import urllib.error
+    import urllib.request
+
     from ampa.server import start_metrics_server
 
     servers = []
@@ -707,9 +711,27 @@ def _metrics_fixture(monkeypatch):
     def _start(**kwargs):
         server, port = start_metrics_server(port=0, **kwargs)
         servers.append(server)
-        return f"http://127.0.0.1:{port}", server
+        base_url = f"http://127.0.0.1:{port}"
+
+        # Wait for server to be ready by polling /health endpoint
+        # Server may return 503 if misconfigured, but that's still "ready"
+        for _ in range(50):  # Max 5 seconds
+            try:
+                urllib.request.urlopen(f"{base_url}/health", timeout=0.1)
+                break  # Server is accepting connections
+            except urllib.error.HTTPError as exc:
+                if exc.code == 503:
+                    break  # Server is ready but misconfigured
+            except Exception:
+                pass  # Server not ready yet
+            time.sleep(0.1)
+
+        return base_url, server
 
     yield _start
+
+    # Small delay to ensure any pending connections are closed before shutdown
+    time.sleep(0.1)
 
     for srv in servers:
         if srv._server:
