@@ -3,7 +3,27 @@ from __future__ import annotations
 import json
 import shlex
 from subprocess import CalledProcessError, check_output
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
+
+# Valid status values for Worklog work items
+# Includes 'input_needed' for intake processes requiring requester input
+VALID_STATUSES: Set[str] = {
+    "open",
+    "in-progress",
+    "completed",
+    "blocked",
+    "input_needed",
+    "deleted",
+}
+
+# Status values that indicate a work item is closed/completed
+CLOSED_STATUSES: Set[str] = {
+    "closed",
+    "done",
+    "completed",
+    "resolved",
+    "deleted",
+}
 
 
 class WLAdapter:
@@ -77,6 +97,68 @@ class WLAdapter:
             if c.get("body") == text:
                 return True
         return False
+
+    def list_by_status(self, status: str) -> List[Dict[str, Any]]:
+        """Query work items by status.
+
+        Args:
+            status: The status to filter by (e.g., "open", "in-progress",
+                "input_needed", etc.)
+
+        Returns:
+            A list of work item dicts matching the status. Returns an empty
+            list if the query fails or no items match.
+        """
+        out = self._run(["list", "--status", status, "--json"])
+        if not out:
+            return []
+        try:
+            return json.loads(out)
+        except Exception:
+            return []
+
+    def list_by_status_and_stage(
+        self, status: str, stage: str
+    ) -> List[Dict[str, Any]]:
+        """Query work items by both status and stage.
+
+        Args:
+            status: The status to filter by (e.g., "open", "input_needed").
+            stage: The stage to filter by (e.g., "idea", "in_review").
+
+        Returns:
+            A list of work item dicts matching both filters. Returns an empty
+            list if the query fails or no items match.
+        """
+        out = self._run(["list", "--status", status, "--stage", stage, "--json"])
+        if not out:
+            return []
+        try:
+            return json.loads(out)
+        except Exception:
+            return []
+
+    def is_valid_status(self, status: str) -> bool:
+        """Check if a status value is valid.
+
+        Args:
+            status: The status value to validate.
+
+        Returns:
+            True if the status is in VALID_STATUSES, False otherwise.
+        """
+        return status in VALID_STATUSES
+
+    def is_closed_status(self, status: str) -> bool:
+        """Check if a status indicates a closed/completed work item.
+
+        Args:
+            status: The status value to check.
+
+        Returns:
+            True if the status indicates a closed/completed item.
+        """
+        return status in CLOSED_STATUSES
 
     def delete_comment(self, work_id: str, comment_id: str) -> bool:
         """Delete a comment and verify it is removed.

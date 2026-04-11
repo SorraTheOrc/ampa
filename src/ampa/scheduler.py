@@ -60,8 +60,6 @@ from .scheduler_store import SchedulerStore  # noqa: E402
 from .scheduler_executor import (  # noqa: E402
     default_llm_probe,
     default_executor,
-    is_local_endpoint,
-    resolve_llm_probe_target,
     score_command,
 )
 
@@ -91,7 +89,7 @@ class Scheduler:
         self,
         store: SchedulerStore,
         config: SchedulerConfig,
-        llm_probe: Optional[Callable[..., bool]] = None,
+        llm_probe: Optional[Callable[[str], bool]] = None,
         executor: Optional[Callable[[CommandSpec], RunResult]] = None,
         command_cwd: Optional[str] = None,
         run_shell: Optional[Callable[..., subprocess.CompletedProcess]] = None,
@@ -284,53 +282,6 @@ class Scheduler:
         orch._notifications_module = notifications_module
         orch._selection_module = selection
 
-    def _effective_llm_agent(self, spec: CommandSpec) -> str:
-        configured = (getattr(spec, "agent", None) or "").strip()
-        if configured:
-            return configured
-        default_agent = (
-            getattr(self.config, "default_llm_agent", "Casey") or "Casey"
-        ).strip()
-        return default_agent or "Casey"
-
-    def _resolve_llm_probe_endpoint(self, spec: CommandSpec, agent: str) -> str:
-        _resolved_agent, endpoint = resolve_llm_probe_target(
-            configured_agent=agent,
-            default_agent=(getattr(self.config, "default_llm_agent", "Casey") or "Casey"),
-            agent_endpoints=(getattr(self.config, "llm_agent_endpoints", {}) or {}),
-            default_url=self.config.llm_healthcheck_url,
-        )
-        if not is_local_endpoint(endpoint):
-            LOG.warning(
-                "Resolved non-local LLM endpoint for command_id=%s agent=%s endpoint=%s",
-                spec.command_id,
-                agent,
-                endpoint,
-            )
-        return endpoint
-
-    def _probe_llm(self, url: str, agent: Optional[str]) -> bool:
-        try:
-            if agent:
-                try:
-                    return bool(self.llm_probe(url, agent))
-                except TypeError:
-                    return bool(self.llm_probe(url))
-            return bool(self.llm_probe(url))
-        except Exception:
-            LOG.debug("LLM probe failed for url=%s agent=%s", url, agent, exc_info=True)
-            return False
-
-    def _llm_available_for_spec(self, spec: CommandSpec) -> bool:
-        agent = self._effective_llm_agent(spec)
-        endpoint = self._resolve_llm_probe_endpoint(spec, agent)
-        return self._probe_llm(endpoint, agent)
-
-    def _resolve_llm_probe_target(self, spec: CommandSpec) -> Tuple[str, str]:
-        agent = self._effective_llm_agent(spec)
-        endpoint = self._resolve_llm_probe_endpoint(spec, agent)
-        return agent, endpoint
-
     def _global_rate_limited(self, now: dt.datetime) -> bool:
         last_start = self.store.last_global_start()
         if last_start is None:
@@ -341,20 +292,14 @@ class Scheduler:
         return since < self.config.global_min_interval_seconds
 
     def _eligible_commands(
-        self,
-        commands: Iterable[CommandSpec],
-        llm_available: Optional[bool] = None,
+        self, commands: Iterable[CommandSpec], llm_available: bool
     ) -> List[CommandSpec]:
         eligible = []
         for spec in commands:
             if spec.frequency_minutes <= 0:
                 continue
-            if spec.requires_llm:
-                if llm_available is None:
-                    if not self._llm_available_for_spec(spec):
-                        continue
-                elif not llm_available:
-                    continue
+            if spec.requires_llm and not llm_available:
+                continue
             state = self.store.get_state(spec.command_id)
             if state.get("running") is True:
                 continue
@@ -368,7 +313,8 @@ class Scheduler:
         commands = self.store.list_commands()
         if not commands:
             return None
-        eligible = self._eligible_commands(commands)
+        llm_available = self.llm_probe(self.config.llm_healthcheck_url)
+        eligible = self._eligible_commands(commands, llm_available)
         if not eligible:
             return None
         scored: List[Tuple[float, float, CommandSpec]] = []
@@ -682,7 +628,6 @@ class Scheduler:
 
                 def _audit_handler(work_item: dict) -> bool:
                     """Execute descriptor-driven audit lifecycle for one item."""
-
                     def _send_audit_notification(
                         *,
                         message_type: str,
@@ -700,44 +645,22 @@ class Scheduler:
                         if not full_md_local:
                             full_md_local = summary_md
 
-                        # Keep inline summary readable and under Discord's 2000-char
-                        # limit.
+                        # Keep inline summary readable and under Discord's 2000-char limit.
                         max_inline_chars = 1800
                         inline_md = (
                             summary_md
                             if len(summary_md) <= max_inline_chars
                             else summary_md[: max_inline_chars - 3] + "..."
                         )
-
-                        # Persist the full audit markdown to a file under
-                        # <command_cwd>/.worklog/audit so operators can inspect
-                        # the saved report; include the path in the inline
-                        # notification content for machine-friendly parsing.
-                        file_path = None
-                        try:
-                            audit_dir = os.path.join(self.command_cwd, ".worklog", "audit")
-                            os.makedirs(audit_dir, exist_ok=True)
-                            ts = dt.datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-                            filename = f"audit-{work_item_id_local}-{ts}.md"
-                            file_path = os.path.join(audit_dir, filename)
-                            with open(file_path, "w", encoding="utf-8") as f:
-                                f.write(full_md_local)
-                        except Exception:
-                            LOG.exception("Failed to persist audit markdown for %s", work_item_id_local)
-                            file_path = None
-
                         content = f"# {title_with_id_local}\n\n```md\n{inline_md}\n```"
-                        if file_path:
-                            content = content + f"\n\nFull audit saved: {file_path}"
-
-                        # Keep the in-memory attachment for downstream notifiers
-                        # that may prefer to upload the content directly.
                         attachment = {
                             "filename": f"audit-{work_item_id_local}.md",
                             "content": full_md_local,
                         }
                         payload = {"content": content, "attachments": [attachment]}
-                        notifications_module.notify("", payload=payload, message_type=message_type)
+                        notifications_module.notify(
+                            "", payload=payload, message_type=message_type
+                        )
 
                     work_item_id = str(work_item.get("id") or "")
                     if not work_item_id:
@@ -750,11 +673,19 @@ class Scheduler:
 
                     result = audit_result_handler.execute(full_item)
                     if not result.success:
-                        LOG.warning("audit_result failed for %s: %s — %s", work_item_id, result.reason, result.details)
+                        LOG.warning(
+                            "audit_result failed for %s: %s — %s",
+                            work_item_id,
+                            result.reason,
+                            result.details,
+                        )
                         try:
                             title_base = work_item.get("title") or work_item_id
                             summary_md = str(result.details or result.reason or "")
-                            full_md = str((result.metadata or {}).get("audit_report_markdown") or summary_md)
+                            full_md = str(
+                                (result.metadata or {}).get("audit_report_markdown")
+                                or summary_md
+                            )
                             _send_audit_notification(
                                 message_type="error",
                                 title_base=title_base,
@@ -769,7 +700,10 @@ class Scheduler:
                     try:
                         title_base = work_item.get("title") or work_item_id
                         summary_md = str(result.details or result.reason or "")
-                        full_md = str((result.metadata or {}).get("audit_report_markdown") or summary_md)
+                        full_md = str(
+                            (result.metadata or {}).get("audit_report_markdown")
+                            or summary_md
+                        )
                         _send_audit_notification(
                             message_type="command",
                             title_base=title_base,
@@ -784,17 +718,32 @@ class Scheduler:
                     if result.reason == "audit_recommends_no_closure":
                         fail_result = audit_fail_handler.execute(refreshed)
                         if not fail_result.success:
-                            LOG.warning("audit_fail failed for %s: %s — %s", work_item_id, fail_result.reason, fail_result.details)
+                            LOG.warning(
+                                "audit_fail failed for %s: %s — %s",
+                                work_item_id,
+                                fail_result.reason,
+                                fail_result.details,
+                            )
                             return False
                         return True
 
                     if result.reason == "audit_result_recorded":
                         refreshed_for_close = fetcher.fetch(work_item_id) or refreshed
                         close_result = close_with_audit_handler.execute(refreshed)
-                        if not close_result.success and close_result.reason == "invalid_from_state":
-                            close_result = close_with_audit_handler.execute(refreshed_for_close)
+                        if (
+                            not close_result.success
+                            and close_result.reason == "invalid_from_state"
+                        ):
+                            close_result = close_with_audit_handler.execute(
+                                refreshed_for_close
+                            )
                         if not close_result.success:
-                            LOG.warning("close_with_audit failed for %s: %s — %s", work_item_id, close_result.reason, close_result.details)
+                            LOG.warning(
+                                "close_with_audit failed for %s: %s — %s",
+                                work_item_id,
+                                close_result.reason,
+                                close_result.details,
+                            )
                             return False
                         return True
 

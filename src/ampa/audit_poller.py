@@ -20,7 +20,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
 
 LOG = logging.getLogger("ampa.audit_poller")
-
 INVALID_FROM_STATE_BACKOFF_THRESHOLD = 3
 
 
@@ -507,7 +506,6 @@ def poll_and_handoff(
                 continue
             filtered.append(it)
         eligible = filtered
-
     if not eligible:
         LOG.info("Audit poller: no candidates after cooldown filter")
         return PollerResult(outcome=PollerOutcome.no_candidates)
