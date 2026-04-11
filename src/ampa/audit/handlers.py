@@ -47,6 +47,7 @@ from typing import Any, Callable, Dict, Optional, Sequence
 from ampa.audit.result import AuditResult, ParseError, parse_audit_output
 from ampa.engine.descriptor import StateTuple, WorkflowDescriptor
 from ampa.engine.invariants import InvariantEvaluator, extract_work_item_fields
+from plan.wl_adapter import CLOSED_STATUSES
 
 LOG = logging.getLogger("ampa.audit.handlers")
 
@@ -1080,11 +1081,10 @@ class CloseWithAuditHandler:
         children = payload.get("children")
         if not isinstance(children, list):
             return True
-        closed_statuses = {"closed", "done", "completed", "resolved"}
         for child in children:
             if not isinstance(child, dict):
                 continue
             status = str(child.get("status") or "").strip().lower()
-            if status and status not in closed_statuses:
+            if status and status not in CLOSED_STATUSES:
                 return False
         return True
