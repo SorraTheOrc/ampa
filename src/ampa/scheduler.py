@@ -81,6 +81,7 @@ from .scheduler_helpers import (  # noqa: E402
     ensure_pr_monitor_command as _ensure_pr_monitor_command,
     ensure_audit_command as _ensure_audit_command,
     ensure_intake_command as _ensure_intake_command,
+    ensure_test_runner_command as _ensure_test_runner_command,
     log_health as _log_health,
 )
 
@@ -261,6 +262,10 @@ class Scheduler:
         # Auto-register the intake selector command which periodically
         # queries Worklog for idea-stage items and selects a candidate.
         _ensure_intake_command(self.store)
+
+        # Auto-register the test-runner command which runs pytest nightly
+        # and creates a critical work item on failure.
+        _ensure_test_runner_command(self.store)
 
         # --- Discord bot process supervision ---
         self._bot_supervisor = BotSupervisor(
@@ -956,6 +961,56 @@ class Scheduler:
                     )
             except Exception:
                 LOG.exception("pr-monitor command failed")
+            return run
+
+        if spec.command_type == "test-runner":
+            try:
+                meta = getattr(spec, "metadata", {}) or {}
+                auto_create_issue = bool(meta.get("auto_create_issue_on_failure", True))
+                if run.exit_code != 0 and auto_create_issue:
+                    try:
+                        from datetime import datetime
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        failure_title = f"Test suite failed at {timestamp}"
+                        failure_body = (
+                            f"Nightly test runner detected test failures.\n\n"
+                            f"**Scheduler Command:** {spec.command_id}\n"
+                            f"**Exit Code:** {run.exit_code}\n"
+                            f"**Time:** {timestamp}\n\n"
+                            f"---TEST OUTPUT---\n"
+                            f"```\n{output[-10000:] if output else 'No output'}\n```"
+                        )
+                        wl_create_cmd = [
+                            "wl", "create",
+                            "--title", failure_title,
+                            "--description", failure_body,
+                            "--priority", "critical",
+                            "--issue-type", "bug",
+                            "--json"
+                        ]
+                        import subprocess as _subprocess
+                        create_result = _subprocess.run(
+                            wl_create_cmd,
+                            capture_output=True,
+                            text=True,
+                            cwd=self.command_cwd,
+                        )
+                        if create_result.returncode == 0:
+                            LOG.info(
+                                "Created critical work item for test failure: %s",
+                                create_result.stdout[:200],
+                            )
+                        else:
+                            LOG.warning(
+                                "Failed to create work item for test failure: %s",
+                                create_result.stderr[:500],
+                            )
+                    except Exception:
+                        LOG.exception("test-runner: failed to create work item on failure")
+                else:
+                    LOG.info("test-runner: tests passed (exit_code=%s)", run.exit_code)
+            except Exception:
+                LOG.exception("test-runner command failed")
             return run
 
         # always post the generic discord notification afterwards

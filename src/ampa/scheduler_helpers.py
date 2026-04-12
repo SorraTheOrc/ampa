@@ -28,6 +28,7 @@ _AUTO_DELEGATE_COMMAND_ID = "auto-delegate"
 _PR_MONITOR_COMMAND_ID = "pr-monitor"
 _AUDIT_COMMAND_ID = "wl-audit"
 _INTAKE_COMMAND_ID = "intake-selector"
+_TEST_RUNNER_COMMAND_ID = "test-runner"
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +278,48 @@ def ensure_intake_command(store: SchedulerStore) -> None:
         )
     except Exception:
         LOG.exception("Failed to auto-register intake selector command")
+
+
+def ensure_test_runner_command(store: SchedulerStore) -> None:
+    """Register the test-runner command if absent.
+
+    Runs pytest to validate the full test suite. On failure, creates a critical
+    work item with test output. Uses 1380 frequency_minutes (~23h) to achieve
+    approximately nightly execution starting from first run time.
+    """
+    try:
+        store_path = getattr(store, "path", None)
+        if store_path == ":memory:":
+            LOG.debug("Skipping test-runner auto-registration for in-memory store")
+            return
+        existing = store.list_commands()
+        for cmd in existing:
+            if cmd.command_id == _TEST_RUNNER_COMMAND_ID:
+                LOG.debug("Test-runner command already registered: %s", _TEST_RUNNER_COMMAND_ID)
+                return
+        test_runner_spec = CommandSpec(
+            command_id=_TEST_RUNNER_COMMAND_ID,
+            command="python -m pytest",
+            requires_llm=False,
+            frequency_minutes=1380,
+            priority=0,
+            metadata={
+                "discord_label": "test runner",
+                "auto_create_issue_on_failure": True,
+            },
+            title="Nightly Test Runner",
+            max_runtime_minutes=60,
+            command_type="test-runner",
+            agent=None,
+        )
+        store.add_command(test_runner_spec)
+        LOG.info(
+            "Auto-registered test-runner command: %s (every %dm)",
+            _TEST_RUNNER_COMMAND_ID,
+            test_runner_spec.frequency_minutes,
+        )
+    except Exception:
+        LOG.exception("Failed to auto-register test-runner command")
 
 
 # send_test_button_message removed — test-button feature removed.
