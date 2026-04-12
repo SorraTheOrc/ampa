@@ -100,20 +100,26 @@ class IntakeRunner:
             existing = dispatches.get(wid) or {}
             existing_pid = existing.get("pid")
             if existing_pid is not None:
-                try:
-                    os.killpg(int(existing_pid), 0)
-                    LOG.info("Intake for %s already in progress (pid=%s); skipping selection", wid, existing_pid)
-                    return {"selected": None, "skipped": "already_running", "pid": existing_pid}
-                except ProcessLookupError:
-                    # Stale record — clear it and allow selection to proceed.
+                # If this dispatch has already been observed as completed,
+                # its pid should not block new selections. Clear stale
+                # observed entries and allow selection.
+                if existing.get("observed"):
                     dispatches.pop(wid, None)
-                except PermissionError:
-                    LOG.info(
-                        "Assuming intake %s already in progress (no permission to signal pid=%s); skipping",
-                        wid,
-                        existing_pid,
-                    )
-                    return {"selected": None, "skipped": "already_running", "pid": existing_pid}
+                else:
+                    try:
+                        os.killpg(int(existing_pid), 0)
+                        LOG.info("Intake for %s already in progress (pid=%s); skipping selection", wid, existing_pid)
+                        return {"selected": None, "skipped": "already_running", "pid": existing_pid}
+                    except ProcessLookupError:
+                        # Stale record — clear it and allow selection to proceed.
+                        dispatches.pop(wid, None)
+                    except PermissionError:
+                        LOG.info(
+                            "Assuming intake %s already in progress (no permission to signal pid=%s); skipping",
+                            wid,
+                            existing_pid,
+                        )
+                        return {"selected": None, "skipped": "already_running", "pid": existing_pid}
 
             LOG.info("Intake runner: selected candidate %s — %s", wid, selected.get("title") or selected.get("name") or "(no title)")
 
@@ -156,18 +162,24 @@ class IntakeRunner:
             existing = dispatches.get(wid) or {}
             existing_pid = existing.get("pid")
             if existing_pid is not None:
-                try:
-                    # If the process group exists this will succeed; otherwise
-                    # ProcessLookupError is raised.
-                    os.killpg(int(existing_pid), 0)
-                    already_running = True
-                except ProcessLookupError:
-                    # Stale record — clear it and allow new dispatch.
+                # If the dispatch was already observed, don't treat its pid as
+                # blocking — clear and proceed. Otherwise check process group.
+                if existing.get("observed"):
                     already_running = False
                     dispatches.pop(wid, None)
-                except PermissionError:
-                    # We can't signal the group, assume it's running to be safe.
-                    already_running = True
+                else:
+                    try:
+                        # If the process group exists this will succeed; otherwise
+                        # ProcessLookupError is raised.
+                        os.killpg(int(existing_pid), 0)
+                        already_running = True
+                    except ProcessLookupError:
+                        # Stale record — clear it and allow new dispatch.
+                        already_running = False
+                        dispatches.pop(wid, None)
+                    except PermissionError:
+                        # We can't signal the group, assume it's running to be safe.
+                        already_running = True
 
         dispatch_result: DispatchResult | None = None
         if already_running:
@@ -455,6 +467,10 @@ class IntakeRunner:
                     entry["observed"] = True
                     entry.setdefault("outcome", outcome)
                     entry.setdefault("completed_at", completed_at)
+                    # Clear the recorded pid for completed/observed dispatches so
+                    # later selection cycles do not mistake a stale pid for an
+                    # in-progress intake run (which would cause skipping).
+                    entry.pop("pid", None)
 
                     # Persist state after each processed entry for durability.
                     try:
