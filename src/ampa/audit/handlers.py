@@ -409,7 +409,7 @@ class AuditResultHandler:
     5. Post structured ``# AMPA Audit Result`` comment.
 
     Note: This handler runs the audit skill internally via
-    ``opencode run "/audit {id}"``.  The audit output is parsed by
+    ``opencode run --command audit {id}``.  The audit output is parsed by
     ``parse_audit_output()`` from ``ampa.audit.result``.
 
     Parameters
@@ -599,8 +599,19 @@ class AuditResultHandler:
         )
 
     def _run_audit(self, work_item_id: str) -> AuditResult | ParseError:
-        """Execute ``opencode run "/audit {id}"`` and parse the output."""
-        cmd = f'opencode run "/audit {work_item_id}"'
+        """Execute the audit skill via opencode and parse the output.
+
+        The canonical opencode invocation is the free-text prompt form
+        expected by the audit skill and delegated to the "probe" subagent:
+            opencode run @delegate(to: "probe") audit {work_item_id} using the audit skill
+        """
+        # Use the exact prompt (no surrounding quotes) the audit skill expects;
+        # delegate the run to the probe subagent so the correct subagent
+        # environment is used.
+        # Build the delegated prompt and quote it for the shell so special
+        # characters (parentheses) are not interpreted by /bin/sh.
+        prompt = f'@delegate(to: "probe") audit {work_item_id} using the audit skill'
+        cmd = f"opencode run '{prompt}'"
         try:
             proc = self._run_shell(
                 cmd,
@@ -631,7 +642,17 @@ class AuditResultHandler:
             )
             # Still try to parse — the output may contain useful data
 
+        # Normalize stdout to a text string — some run_shell implementations
+        # may return bytes in proc.stdout (or opencode may emit bytes). The
+        # parser expects a str, so decode bytes safely here to avoid
+        # TypeError during parsing.
         raw_output = proc.stdout or ""
+        if isinstance(raw_output, (bytes, bytearray)):
+            try:
+                raw_output = raw_output.decode("utf-8")
+            except Exception:
+                raw_output = str(raw_output)
+
         return parse_audit_output(raw_output)
 
 
