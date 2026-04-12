@@ -1,0 +1,28 @@
+# Deterministic mapping for State × Stage -> assignee
+# Matching is exact on (state, stage). Use the first matching mapping; otherwise use default_assignee.
+default_assignee: Build
+mappings:
+  # For open or in-progress work items
+  - states: [open, in-progress]
+    stage: plan_complete
+    assignee: Patch
+  - states: [open, in-progress]
+    stage: intake_complete
+    assignee: Archie
+  - states: [open, in-progress]
+    stage: idea
+    assignee: Map
+  - states: [open, in-progress]
+    stage: in_review
+    assignee: Patch
+  - states: [open, in-progress]
+    stage: done
+    assignee: Build
+
+  # Explicit state-based mappings
+  - states: [blocked]
+    stage: "*"
+    assignee: Build
+  - states: [completed]
+    stage: "*"
+    assignee: Build
