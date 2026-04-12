@@ -66,6 +66,66 @@ except ImportError:  # pragma: no cover - allow running as script
 LOG = logging.getLogger("ampa.scheduler")
 
 
+def find_workflow_descriptor() -> str:
+    """Resolve the workflow descriptor path using the standard precedence.
+
+    Returns the first candidate path (may be a module-local default even if it
+    does not exist) to allow callers to load/validate it.
+    """
+    env_path = os.getenv("AMPA_WORKFLOW_DESCRIPTOR")
+    if env_path:
+        return env_path
+
+    try:
+        proj_base = os.path.join(os.getcwd(), ".worklog", "ampa")
+        project_candidates = [
+            os.path.join(proj_base, "workflow.json"),
+            os.path.join(proj_base, "workflow.yaml"),
+            os.path.join(proj_base, "workflow.yml"),
+        ]
+    except Exception:
+        project_candidates = []
+
+    try:
+        xdg_base = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+        xdg_base = os.path.join(xdg_base, "opencode", ".worklog", "ampa")
+        xdg_candidates = [
+            os.path.join(xdg_base, "workflow.json"),
+            os.path.join(xdg_base, "workflow.yaml"),
+            os.path.join(xdg_base, "workflow.yml"),
+        ]
+    except Exception:
+        xdg_candidates = []
+
+    module_root = os.path.dirname(os.path.dirname(__file__))
+    module_docs = os.path.join(module_root, "docs", "workflow")
+    module_candidates = [
+        os.path.join(module_docs, "workflow.json"),
+        os.path.join(module_docs, "workflow.yaml"),
+        os.path.join(module_docs, "workflow.yml"),
+    ]
+
+    descriptor_path = None
+    for c in project_candidates:
+        if c and os.path.isfile(c):
+            descriptor_path = c
+            break
+    if descriptor_path is None:
+        for c in xdg_candidates:
+            if c and os.path.isfile(c):
+                descriptor_path = c
+                break
+    if descriptor_path is None:
+        for c in module_candidates:
+            if c and os.path.isfile(c):
+                descriptor_path = c
+                break
+        if descriptor_path is None:
+            descriptor_path = module_candidates[0]
+
+    return descriptor_path
+
+
 def build_engine(
     run_shell: Callable[..., subprocess.CompletedProcess],
     command_cwd: str,
