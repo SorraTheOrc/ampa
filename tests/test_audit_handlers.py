@@ -587,7 +587,8 @@ class TestAuditFailHandler:
         # Verify state transition
         assert len(updater.calls) == 1
         assert updater.calls[0]["status"] == "in_progress"
-        assert updater.calls[0]["stage"] == "audit_failed"
+        # audit failure is represented by the in_progress stage (no alias)
+        assert updater.calls[0]["stage"] == "in_progress"
 
     def test_callable_returns_bool(
         self, descriptor: WorkflowDescriptor, evaluator: InvariantEvaluator
@@ -682,10 +683,10 @@ class TestAuditFailHandler:
         )
         result = handler.execute(wi)
         assert result.success is True
-        # Check that a wl update --tags command was called
+        # Previously we applied an 'audit_failed' tag; tags are no longer
+        # applied for audit_fail effects. Ensure no --tags call was made.
         tag_cmds = [c for c in shell_calls if "--tags" in c]
-        assert len(tag_cmds) == 1
-        assert "audit_failed" in tag_cmds[0]
+        assert len(tag_cmds) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -953,7 +954,10 @@ class TestApplyTags:
                 args="", returncode=0, stdout="", stderr=""
             )
 
-        ok = _apply_tags(tracking_shell, "WL-1", ["audit_failed"], ["audit_failed"])
+        # With audit_failed tag removed from effects, _apply_tags behaviour is
+        # unchanged. This test still verifies that when tags already include
+        # the requested tags, no shell invocation occurs.
+        ok = _apply_tags(tracking_shell, "WL-1", ["existing_tag"], ["existing_tag"])
         assert ok is True
         # No shell call needed since tag already exists
         assert len(shell_calls) == 0

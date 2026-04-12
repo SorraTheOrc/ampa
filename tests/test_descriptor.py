@@ -120,9 +120,10 @@ class TestLoadRealWorkflow:
     def test_stages(self, descriptor: WorkflowDescriptor) -> None:
         assert "idea" in descriptor.stages
         assert "done" in descriptor.stages
-        # We removed "audit_passed" as a runtime stage and canonicalised
-        # its mapping to the "done" stage; expect 10 stages now.
-        assert len(descriptor.stages) == 10  # includes delegated stage
+        # We removed the explicit "audit_failed" alias as a runtime stage
+        # and canonicalised its mapping to the "in_progress" stage; expect
+        # 9 stages in the canonical descriptor now.
+        assert len(descriptor.stages) == 9  # includes delegated stage
 
     def test_state_aliases(self, descriptor: WorkflowDescriptor) -> None:
         assert "idea" in descriptor.states

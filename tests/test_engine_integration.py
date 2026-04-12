@@ -173,7 +173,6 @@ STATES = {
     "shipped": StateTuple(status="closed", stage="done"),
     "delegated": StateTuple(status="in-progress", stage="in_progress"),
     "audit_passed": StateTuple(status="completed", stage="done"),
-    "audit_failed": StateTuple(status="in_progress", stage="audit_failed"),
     "escalated": StateTuple(status="blocked", stage="escalated"),
     "blocked_in_progress": StateTuple(status="blocked", stage="in_progress"),
     "blocked_delegated": StateTuple(status="blocked", stage="in_progress"),
@@ -187,10 +186,15 @@ STAGES = (
     "plan_complete",
     "in_progress",
     "in_review",
-    "audit_failed",
     "escalated",
     "done",
 )
+
+# Canonical representation for an audit failure — the workflow treats
+# audit failure as remaining in the in_progress status and in_progress
+# stage (no separate alias required). Tests reference this where the
+# descriptor would previously have exposed an "audit_failed" alias.
+AF_STATE = StateTuple(status="in_progress", stage="in_progress")
 
 # Full invariant set matching workflow.json
 INVARIANTS = (
@@ -401,7 +405,7 @@ COMMANDS = {
         name="audit_fail",
         description="Audit found gaps",
         from_states=("review",),
-        to="audit_failed",
+        to=StateTuple(status="in_progress", stage="in_progress"),
         actor="QA",
         pre=("requires_audit_result", "audit_does_not_recommend_closure"),
     ),
@@ -420,7 +424,7 @@ COMMANDS = {
     "escalate": Command(
         name="escalate",
         description="Escalate to Producer",
-        from_states=("audit_failed", "delegated"),
+        from_states=(StateTuple(status="in_progress", stage="in_progress"), "delegated"),
         to="escalated",
         actor="PM",
         effects=Effects(
@@ -431,7 +435,7 @@ COMMANDS = {
     "retry_delegation": Command(
         name="retry_delegation",
         description="Re-delegate after audit failure",
-        from_states=("audit_failed", "escalated"),
+        from_states=(StateTuple(status="in_progress", stage="in_progress"), "escalated"),
         to="plan",
         actor="PM",
     ),
@@ -619,7 +623,11 @@ class TestStateTransitions:
 
         for cmd_name, from_alias, to_alias in transitions:
             cmd = desc.get_command(cmd_name)
-            from_state = desc.resolve_alias(from_alias)
+            # from_alias may be either an alias string or an inline StateTuple
+            if isinstance(from_alias, StateTuple):
+                from_state = from_alias
+            else:
+                from_state = desc.resolve_alias(from_alias)
             to_state = desc.resolve_state_ref(cmd.to)
 
             # Verify from-state is in the command's from_states
@@ -657,8 +665,8 @@ class TestStateTransitions:
         desc = _make_descriptor()
 
         transitions = [
-            ("audit_fail", "review", "audit_failed"),
-            ("retry_delegation", "audit_failed", "plan"),
+            ("audit_fail", "review", AF_STATE),
+            ("retry_delegation", AF_STATE, "plan"),
             ("delegate", "plan", "delegated"),
             ("complete_work", "delegated", "building"),
             ("submit_review", "building", "review"),
@@ -667,7 +675,10 @@ class TestStateTransitions:
 
         for cmd_name, from_alias, to_alias in transitions:
             cmd = desc.get_command(cmd_name)
-            from_state = desc.resolve_alias(from_alias)
+            if isinstance(from_alias, StateTuple):
+                from_state = from_alias
+            else:
+                from_state = desc.resolve_alias(from_alias)
             to_state = desc.resolve_state_ref(cmd.to)
 
             valid_from = [desc.resolve_state_ref(ref) for ref in cmd.from_states]
@@ -675,7 +686,10 @@ class TestStateTransitions:
                 f"Command '{cmd_name}': {from_alias} not in from_states"
             )
 
-            expected_to = desc.resolve_alias(to_alias)
+            if isinstance(to_alias, StateTuple):
+                expected_to = to_alias
+            else:
+                expected_to = desc.resolve_alias(to_alias)
             assert to_state == expected_to, (
                 f"Command '{cmd_name}': to={to_state} != expected {expected_to}"
             )
@@ -715,14 +729,17 @@ class TestStateTransitions:
         desc = _make_descriptor()
 
         transitions = [
-            ("escalate", "audit_failed", "escalated"),
+            ("escalate", AF_STATE, "escalated"),
             ("de_escalate", "escalated", "plan"),
             ("delegate", "plan", "delegated"),
         ]
 
         for cmd_name, from_alias, to_alias in transitions:
             cmd = desc.get_command(cmd_name)
-            from_state = desc.resolve_alias(from_alias)
+            if isinstance(from_alias, StateTuple):
+                from_state = from_alias
+            else:
+                from_state = desc.resolve_alias(from_alias)
             to_state = desc.resolve_state_ref(cmd.to)
 
             valid_from = [desc.resolve_state_ref(ref) for ref in cmd.from_states]
@@ -1064,26 +1081,31 @@ class TestDelegationLifecycle:
         """
         desc = _make_descriptor()
 
-        # Step 1: Verify audit_fail command transitions from review to audit_failed
+        # Step 1: Verify audit_fail command transitions from review to an
+        # in-progress state (audit failure is represented inline as
+        # in_progress/in_progress rather than a separate alias).
         audit_fail_cmd = desc.get_command("audit_fail")
         review_state = desc.resolve_alias("review")
         valid_from = [desc.resolve_state_ref(r) for r in audit_fail_cmd.from_states]
         assert review_state in valid_from
-        assert desc.resolve_state_ref(audit_fail_cmd.to) == desc.resolve_alias(
-            "audit_failed"
+        assert desc.resolve_state_ref(audit_fail_cmd.to) == StateTuple(
+            status="in_progress",
+            stage="in_progress",
         )
 
-        # Step 2: Verify retry_delegation from audit_failed back to plan
+        # Step 2: Verify retry_delegation accepts the inline in_progress
+        # representation as a from-state and targets plan.
         retry_cmd = desc.get_command("retry_delegation")
-        af_state = desc.resolve_alias("audit_failed")
+        af_state = StateTuple(status="in_progress", stage="in_progress")
         valid_from = [desc.resolve_state_ref(r) for r in retry_cmd.from_states]
         assert af_state in valid_from
         assert desc.resolve_state_ref(retry_cmd.to) == desc.resolve_alias("plan")
 
-        # Step 3: Process_transition from audit_failed to plan_complete (retry)
+        # Step 3: Process_transition from audit failure (represented inline as
+        # in_progress/in_progress) to plan_complete (retry)
         wi = _make_work_item_data(
             status="in_progress",
-            stage="audit_failed",
+            stage="in_progress",
         )
         engine, deps = _build_engine(work_item_data=wi)
         result = engine.process_transition("WL-1", "plan_complete")
@@ -1100,9 +1122,9 @@ class TestDelegationLifecycle:
         """
         desc = _make_descriptor()
 
-        # Escalation from audit_failed
+        # Escalation accepts the inline in_progress representation
         escalate_cmd = desc.get_command("escalate")
-        af_state = desc.resolve_alias("audit_failed")
+        af_state = StateTuple(status="in_progress", stage="in_progress")
         valid_from = [desc.resolve_state_ref(r) for r in escalate_cmd.from_states]
         assert af_state in valid_from
 

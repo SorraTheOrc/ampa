@@ -57,7 +57,6 @@
     "in_progress",
     "delegated",
     "in_review",
-    "audit_failed",
     "escalated",
     "done"
   ],
@@ -98,10 +97,7 @@
       "status": "completed",
       "stage": "done"
     },
-    "audit_failed": {
-      "status": "in_progress",
-      "stage": "audit_failed"
-    },
+    
     "escalated": {
       "status": "blocked",
       "stage": "escalated"
@@ -436,17 +432,16 @@
       "from": [
         "review"
       ],
-      "to": "audit_failed",
+        "to": {
+          "status": "in_progress",
+          "stage": "in_progress"
+        },
       "actor": "QA",
       "pre": [
         "requires_audit_result",
         "audit_does_not_recommend_closure"
       ],
-      "effects": {
-        "add_tags": [
-          "audit_failed"
-        ]
-      }
+        "effects": {}
     },
     "close_with_audit": {
       "description": "Close a work item after a successful audit confirms all acceptance criteria are met. Sets needs-producer-review for final human approval. Maps to scheduler.py auto-completion: wl update --status completed --stage in_review.",
@@ -476,8 +471,11 @@
     },
     "escalate": {
       "description": "Escalate a work item to a Producer when audit fails repeatedly or a critical issue is found that requires human judgment.",
-      "from": [
-        "audit_failed",
+        "from": [
+        {
+          "status": "in_progress",
+          "stage": "in_progress"
+        },
         "delegated"
       ],
       "to": "escalated",
@@ -504,8 +502,11 @@
     },
     "retry_delegation": {
       "description": "Re-delegate a work item after an audit failure has been addressed. Moves the item back to a delegatable state.",
-      "from": [
-        "audit_failed",
+        "from": [
+        {
+          "status": "in_progress",
+          "stage": "in_progress"
+        },
         "escalated"
       ],
       "to": "plan",

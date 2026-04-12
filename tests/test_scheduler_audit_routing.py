@@ -243,8 +243,10 @@ def test_scheduler_audit_non_closure_notification_has_failed_criteria(
         if cmd_s.startswith(f"wl update {work_id}"):
             if "--status in_progress" in cmd_s:
                 current_status = "in_progress"
-            if "--stage audit_failed" in cmd_s:
-                current_stage = "audit_failed"
+            # audit failures are represented by remaining in the in_progress
+            # stage rather than a separate alias.
+            if "--stage in_progress" in cmd_s:
+                current_stage = "in_progress"
             return subprocess.CompletedProcess(cmd, 0, '{"success": true}', "")
 
         return subprocess.CompletedProcess(cmd, 0, "", "")
@@ -264,7 +266,8 @@ def test_scheduler_audit_non_closure_notification_has_failed_criteria(
     sched.start_command(spec)
 
     assert any(c.startswith(f"wl comment add {work_id}") for c in calls)
-    assert any(c.startswith(f"wl update {work_id}") and "--stage audit_failed" in c for c in calls)
+    # Audit failures are represented by remaining in the in_progress stage
+    assert any(c.startswith(f"wl update {work_id}") and "--stage in_progress" in c for c in calls)
     assert not any(c.startswith("gh pr view") for c in calls)
 
     payload_calls = [
