@@ -15,6 +15,7 @@ import datetime as dt
 import logging
 import os
 import signal
+import shutil
 import subprocess
 import time
 from typing import Dict, Optional, Tuple
@@ -217,17 +218,47 @@ def default_executor(spec: CommandSpec, command_cwd: Optional[str] = None) -> Ru
         spec.command or ""
     )
     LOG.info("Starting command %s (timeout=%s)", spec.command_id, timeout)
+    # If this command is the wl status scheduled task, prefer invoking the
+    # absolute 'wl' binary when available to avoid shell aliases, functions,
+    # or wrapper scripts in the scheduler's runtime environment that may
+    # interpret arguments differently (observed: 'status' -> 'stats').
+    resolved_command = spec.command
+    try:
+        cmd_trim = (spec.command or "").strip()
+        if cmd_trim.startswith("wl status"):
+            which_wl = shutil.which("wl")
+            if which_wl:
+                # Preserve any extra args after 'wl status'
+                tail = cmd_trim[len("wl status"):]
+                resolved_command = f"{which_wl} status{tail}"
+                LOG.debug("Resolved 'wl' to absolute path: %s -> %s", spec.command, resolved_command)
+    except Exception:
+        LOG.exception("Failed to resolve absolute 'wl' path; falling back to configured command")
+    # Log the exact command, cwd and PATH to help diagnose environments where
+    # the observed runtime differs from the configured command (e.g. the
+    # 'wl status' -> 'wl stats' mystery). Use DEBUG level to avoid noisy logs
+    # during normal operation but ensure test runs can enable it to capture
+    # invocation details.
+    try:
+        LOG.debug(
+            "Command invoke details: command=%r, command_cwd=%r, PATH=%r",
+            spec.command,
+            command_cwd,
+            os.getenv("PATH"),
+        )
+    except Exception:
+        LOG.exception("Failed to log command invocation details")
     try:
         if is_delegation_cmd and timeout is not None:
             # Use Popen-based graceful termination (SIGTERM → SIGKILL) for
             # delegation and opencode-run commands so they receive a chance to
             # clean up before being force-killed.
             result = _run_command_with_graceful_timeout(
-                spec.command, timeout, command_cwd
+                resolved_command, timeout, command_cwd
             )
         else:
             result = subprocess.run(  # nosec - shell execution is explicit configuration
-                spec.command,
+                resolved_command,
                 shell=True,
                 check=False,
                 timeout=timeout,

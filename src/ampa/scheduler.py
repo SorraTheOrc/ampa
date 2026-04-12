@@ -287,6 +287,42 @@ class Scheduler:
         orch._notifications_module = notifications_module
         orch._selection_module = selection
 
+    def _resolve_llm_probe_target(self, spec: Optional[CommandSpec]):
+        """Resolve agent identifier and endpoint for probing LLM availability.
+
+        Mirrors the helper in scheduler_executor.resolve_llm_probe_target but
+        uses the scheduler config and a spec (which may be None) to derive the
+        target agent and endpoint. Logs a warning when the resolved endpoint is
+        non-local to avoid accidental probing of remote services.
+        """
+        from .scheduler_executor import resolve_llm_probe_target, is_local_endpoint
+
+        configured_agent = None
+        if spec is not None:
+            configured_agent = getattr(spec, "agent", None)
+
+        agent, endpoint = resolve_llm_probe_target(
+            configured_agent=configured_agent,
+            default_agent=self.config.default_llm_agent,
+            agent_endpoints=self.config.llm_agent_endpoints,
+            default_url=self.config.llm_healthcheck_url,
+        )
+        if not is_local_endpoint(endpoint):
+            LOG.warning("Resolved non-local LLM endpoint for agent=%s url=%s", agent, endpoint)
+        return agent, endpoint
+
+    def _llm_available_for_spec(self, spec: Optional[CommandSpec]) -> bool:
+        """Probe LLM availability for a given spec using the configured probe.
+
+        Supports probe callables with signature either (url) or (url, agent).
+        """
+        agent, endpoint = self._resolve_llm_probe_target(spec)
+        try:
+            # If probe accepts two args prefer calling with (url, agent)
+            return self.llm_probe(endpoint, agent)
+        except TypeError:
+            return self.llm_probe(endpoint)
+
     def _global_rate_limited(self, now: dt.datetime) -> bool:
         last_start = self.store.last_global_start()
         if last_start is None:
@@ -318,7 +354,10 @@ class Scheduler:
         commands = self.store.list_commands()
         if not commands:
             return None
-        llm_available = self.llm_probe(self.config.llm_healthcheck_url)
+        # Determine LLM availability via resolved agent endpoint. Use a
+        # helper so we can support both probe(callable) signatures that take
+        # either (url) or (url, agent).
+        llm_available = self._llm_available_for_spec(None)
         eligible = self._eligible_commands(commands, llm_available)
         if not eligible:
             return None

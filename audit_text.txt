@@ -1,0 +1,20 @@
+Ready to close: No
+
+## Summary
+Intake Query and Selection correctly implements deterministic, single-item selection and has focused unit tests for parsing, sorting, tiebreaks, and invalid JSON handling. Remaining blockers prevent closure: documentation exists only as a module docstring and draft (criterion 6 partial), rate-limiting is delegated to the scheduler and not validated here (criterion 4 partial), and no verified full-project test-suite pass was recorded (criterion 7 unmet).
+
+## Acceptance Criteria Status
+
+| # | Criterion | Verdict | Evidence |
+|---|-----------|---------|----------|
+| 1 | Query returns items with stage="idea" sorted by sortIndex descending (highest priority first) | met | src/ampa/intake_selector.py:95-117 — _item_sort_key implements (-sortIndex, -updated_ts, id) for descending priority. |
+| 2 | Selects single highest priority item per run (one at a time to avoid overwhelming opencode sessions) | met | src/ampa/intake_selector.py:119-127 — select_top sorts candidates and returns the single top candidate. |
+| 3 | Handles empty result set gracefully (no-op, no errors) | met | src/ampa/intake_runner.py:41-46 — runner logs "no idea-stage candidates" and returns {"selected": None}. |
+| 4 | Respects scheduler global rate limiting | partial | src/ampa/intake_runner.py:31-37, 175-181 — runner delegates rate-limiting to Scheduler and contains no internal rate-limiter; scheduler-level tests exist but integration not validated. |
+| 5 | Unit tests cover selection logic and edge cases | met | tests/test_intake_selector.py:22-69 — tests cover empty responses, tiebreaks, and invalid JSON handling. |
+| 6 | All related documentation is updated to reflect the changes, including code comments, README, and any relevant wiki or docs site entries | partial | src/ampa/intake_selector.py:1-10 & .opencode/tmp/intake-draft-intake-query-and-selection-AM-0MNUB4NP0007QJ63.md:1-10 — module docstring and draft exist, but no published top-level README/docs entry found. |
+| 7 | Full project test suite must pass with the new changes | unmet | .worklog/logs/sync.log:1031 and recent suite runs indicated failing tests; no verified full-suite passing run recorded. |
+
+## Children Status
+
+No children.

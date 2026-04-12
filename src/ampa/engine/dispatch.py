@@ -40,6 +40,7 @@ import os
 import signal
 import subprocess
 import threading
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -130,6 +131,154 @@ class Dispatcher(Protocol):
 def _utc_now() -> datetime:
     """Return the current UTC time (extracted for testability)."""
     return datetime.now(timezone.utc)
+
+
+# ---------------------------------------------------------------------------
+# Intake dispatcher
+# ---------------------------------------------------------------------------
+
+
+def _enforce_timeout_by_pid(pgid: int, timeout: int) -> None:
+    """Enforce timeout against a process group identified by *pgid*.
+
+    Mirrors the behaviour of :func:`_enforce_timeout` but uses a process-group
+    id instead of a Popen object. This is used by dispatchers that only have
+    the spawned pid available (e.g. OpenCodeRunDispatcher).
+    """
+    # If the process group is already gone, os.killpg(..., 0) will raise
+    # ProcessLookupError — treat that as success / nothing to do.
+    try:
+        # Raise if not present
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        # We may lack permissions to signal the group; give up.
+        return
+
+    LOG.warning(
+        "Intake dispatch timeout (%ds) reached for pgid %d — sending SIGTERM",
+        timeout,
+        pgid,
+    )
+
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        return
+
+    # Wait a short grace period for the group to exit.
+    try:
+        # Poll for up to the grace period. Use small sleeps so we can detect
+        # early exit without blocking longer than necessary.
+        waited = 0
+        while waited < _TIMEOUT_GRACE_PERIOD:
+            try:
+                os.killpg(pgid, 0)
+            except ProcessLookupError:
+                return
+            except PermissionError:
+                return
+            time.sleep(0.1)
+            waited += 0.1
+    except Exception:
+        # Fall through to SIGKILL attempt.
+        pass
+
+    # If still present, attempt SIGKILL.
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        return
+
+
+class IntakeDispatcher:
+    """Dispatch wrapper specialised for spawning `/intake` runs.
+
+    Constructs the canonical intake command and delegates the spawn to an
+    underlying Dispatcher (defaults to :class:`OpenCodeRunDispatcher`). A
+    configurable timeout (seconds) may be provided; when set and positive a
+    daemon ``threading.Timer`` is started to enforce the timeout against the
+    spawned process group.
+
+    Args:
+        runner: Underlying dispatcher used to spawn the command. When ``None``
+            an :class:`OpenCodeRunDispatcher` is created.
+        timeout: Timeout in seconds for the intake session. Overrides the
+            ``AMPA_INTAKE_TIMEOUT`` env var when provided. Defaults to 3600
+            seconds (1 hour).
+        clock: Callable returning current UTC datetime (for tests).
+    """
+
+    def __init__(
+        self,
+        runner: Dispatcher | None = None,
+        timeout: int | None = None,
+        clock: Any = None,
+    ) -> None:
+        self._runner = runner or OpenCodeRunDispatcher()
+        self._clock = clock or _utc_now
+
+        env_val = os.environ.get("AMPA_INTAKE_TIMEOUT")
+        if env_val is not None:
+            try:
+                self._timeout = int(env_val)
+            except ValueError:
+                # fall back to provided constructor arg or default
+                self._timeout = timeout or 3600
+        else:
+            self._timeout = timeout or 3600
+
+    def dispatch(self, command: str, work_item_id: str) -> DispatchResult:
+        """Spawn an intake session for *work_item_id*.
+
+        The provided *command* argument is ignored; the dispatcher builds the
+        canonical intake command:
+
+            opencode run "/intake {id} do not ask questions"
+
+        and delegates to the configured underlying runner.
+        """
+        ts = self._clock()
+        # Build the exact intake command required by the operator. The format
+        # must match the expected CLI: no surrounding quotes, sentence case,
+        # trailing period, and agent flag at the end.
+        intake_cmd = (
+            f"opencode run /intake {work_item_id} Do not ask questions. --agent Casey"
+        )
+        LOG.info("IntakeDispatcher dispatching %s: %s", work_item_id, intake_cmd)
+
+        result = self._runner.dispatch(intake_cmd, work_item_id)
+
+        # If spawn succeeded and we have a pid, schedule timeout enforcement
+        # against the process group (the spawned processes use a new session so
+        # the pid == PGID).
+        if result.success and result.pid is not None and self._timeout and self._timeout > 0:
+            try:
+                timer = threading.Timer(
+                    self._timeout,
+                    _enforce_timeout_by_pid,
+                    args=(result.pid, self._timeout),
+                )
+                timer.daemon = True
+                timer.start()
+            except Exception:
+                LOG.exception("Failed to start intake timeout timer for %s", work_item_id)
+
+        # Preserve the original dispatch timestamp if underlying runner set it,
+        # otherwise ensure we return a result with the expected timestamp.
+        if result.timestamp is None:
+            result = DispatchResult(
+                success=result.success,
+                command=result.command,
+                work_item_id=result.work_item_id,
+                timestamp=ts,
+                pid=result.pid,
+                error=result.error,
+                container_id=getattr(result, "container_id", None),
+            )
+
+        return result
 
 
 class OpenCodeRunDispatcher:
