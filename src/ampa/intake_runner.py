@@ -19,6 +19,9 @@ from . import notifications
 from .engine.dispatch import IntakeDispatcher, DispatchResult
 import os
 import datetime as dt
+import json
+from datetime import timezone
+import logging as _logging
 
 LOG = logging.getLogger("ampa.intake_runner")
 
@@ -36,6 +39,12 @@ class IntakeRunner:
 
         Returns a small dict describing outcome: {"selected": id or None}.
         """
+        # First, check previous dispatches for completion / input_needed / timeout
+        try:
+            self._process_previous_dispatches(spec, store)
+        except Exception:
+            LOG.exception("Failed while processing previous intake dispatch outcomes")
+
         selector = IntakeCandidateSelector(run_shell=self.run_shell, cwd=self.command_cwd)
         candidates = selector.query_candidates()
         if candidates is None:
@@ -286,3 +295,124 @@ class IntakeRunner:
         except Exception:
             LOG.exception("Failed to add Worklog comment for selected intake candidate %s", wid)
         return {"selected": wid, "dispatch": getattr(dispatch_result, "success", False)}
+
+    def _process_previous_dispatches(self, spec, store) -> None:
+        """Inspect previously-recorded intake dispatches and record outcomes.
+
+        For each recorded dispatch in the store state under ``intake_dispatches``
+        that has not already been observed, fetch the work item via ``wl show``
+        and detect whether the intake run completed (stage=="intake_complete"),
+        required more input (status=="input_needed"), or timed out (older than
+        AMPA_INTAKE_COMPLETION_TIMEOUT seconds).  Outcomes are recorded in the
+        per-command state under ``intake_metrics`` and the dispatch entry is
+        annotated so it is not processed repeatedly.
+        """
+        # timeout default: 4 hours (can be overridden by env var)
+        try:
+            timeout_seconds = int(os.environ.get("AMPA_INTAKE_COMPLETION_TIMEOUT", 4 * 3600))
+        except Exception:
+            timeout_seconds = 4 * 3600
+
+        state = store.get_state(spec.command_id) or {}
+        dispatches = state.setdefault("intake_dispatches", {})
+        metrics = state.setdefault("intake_metrics", {})
+
+        now = dt.datetime.now(timezone.utc)
+
+        for wid, entry in list(dispatches.items()):
+            try:
+                if entry.get("observed"):
+                    continue
+
+                started_iso = entry.get("started_at")
+                if not started_iso:
+                    # No timestamp; mark observed to avoid repeated work.
+                    entry["observed"] = True
+                    continue
+
+                try:
+                    started_dt = dt.datetime.fromisoformat(started_iso)
+                except Exception:
+                    # Malformed timestamp: mark observed and continue.
+                    entry["observed"] = True
+                    continue
+
+                elapsed = (now - started_dt).total_seconds()
+
+                outcome = None
+                # If past configured timeout, treat as timeout without querying WL
+                if elapsed >= timeout_seconds:
+                    outcome = "timeout"
+                    completed_at = now.isoformat()
+                else:
+                    # Query work item to detect stage/status
+                    cmd = f"wl show {wid} --children --json"
+                    try:
+                        proc = self.run_shell(cmd, shell=True, check=False, capture_output=True, text=True, cwd=self.command_cwd, timeout=30)
+                    except TypeError:
+                        # Some test fakes do not accept timeout kwarg
+                        proc = self.run_shell(cmd, shell=True, check=False, capture_output=True, text=True, cwd=self.command_cwd)
+                    except Exception:
+                        proc = None
+
+                    if proc is None or getattr(proc, "returncode", 0) != 0:
+                        # Unable to observe yet; skip processing this entry for now.
+                        continue
+
+                    try:
+                        payload = json.loads(proc.stdout or "null")
+                    except Exception:
+                        # Malformed output; skip for now
+                        continue
+
+                    # Normalise wl show shapes
+                    wi = None
+                    if isinstance(payload, dict):
+                        if isinstance(payload.get("workItem"), dict):
+                            wi = payload.get("workItem")
+                        elif isinstance(payload.get("workItems"), list) and payload.get("workItems"):
+                            wi = payload.get("workItems")[0]
+                        else:
+                            wi = payload
+
+                    if not isinstance(wi, dict):
+                        continue
+
+                    stage = wi.get("stage")
+                    status = wi.get("status")
+
+                    if stage == "intake_complete":
+                        outcome = "intake_complete"
+                        completed_at = now.isoformat()
+                    elif status == "input_needed":
+                        outcome = "input_needed"
+                        completed_at = now.isoformat()
+
+                if outcome:
+                    # Record metric
+                    dur = None
+                    try:
+                        dur = int(elapsed) if elapsed is not None else None
+                    except Exception:
+                        dur = None
+
+                    metrics[wid] = {
+                        "started_at": started_iso,
+                        "completed_at": completed_at,
+                        "outcome": outcome,
+                        "duration_seconds": dur,
+                    }
+                    # Annotate dispatch entry so we don't re-process it.
+                    entry["observed"] = True
+                    entry.setdefault("outcome", outcome)
+                    entry.setdefault("completed_at", completed_at)
+
+                    # Persist state after each processed entry for durability.
+                    try:
+                        state["intake_metrics"] = metrics
+                        state["intake_dispatches"] = dispatches
+                        store.update_state(spec.command_id, state)
+                    except Exception:
+                        LOG.exception("Failed to persist intake dispatch outcome for %s", wid)
+            except Exception:
+                LOG.exception("Unexpected error while inspecting dispatch %s", wid)
