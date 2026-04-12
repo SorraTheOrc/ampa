@@ -64,11 +64,60 @@ class IntakeRunner:
             LOG.warning("Intake runner: selected candidate missing id")
             return {"selected": None}
 
-        LOG.info("Intake runner: selected candidate %s — %s", wid, selected.get("title") or selected.get("name") or "(no title)")
-
-        # Persist selection timestamp to store state for observability.
+        # Before persisting selection or notifying, consult per-item retry/
+        # dispatch state. If the item is currently backoff-scheduled,
+        # permanently failed, or already running (live pid), skip selection.
         try:
             state = store.get_state(spec.command_id) or {}
+            dispatches = state.setdefault("intake_dispatches", {})
+            retries = state.setdefault("intake_retries", {})
+
+            # Check for permanent failure recorded in retry state.
+            entry = retries.get(wid) or {}
+            permanent = bool(entry.get("permanent_failure", False))
+            next_attempt_iso = entry.get("next_attempt")
+
+            if permanent:
+                LOG.info("Intake for %s has permanent failure recorded; skipping selection", wid)
+                return {"selected": None, "skipped": "permanent_failure"}
+
+            if next_attempt_iso:
+                try:
+                    next_dt = dt.datetime.fromisoformat(next_attempt_iso)
+                    now = dt.datetime.now(dt.timezone.utc)
+                    if now < next_dt:
+                        LOG.info(
+                            "Intake for %s is backoff-scheduled until %s; skipping selection",
+                            wid,
+                            next_attempt_iso,
+                        )
+                        return {"selected": None, "skipped": "backoff", "next_attempt": next_attempt_iso}
+                except Exception:
+                    LOG.exception("Malformed next_attempt timestamp for %s: %r", wid, next_attempt_iso)
+
+            # If we have a recorded dispatch with a pid, prefer to avoid
+            # selecting while the process is still running.
+            existing = dispatches.get(wid) or {}
+            existing_pid = existing.get("pid")
+            if existing_pid is not None:
+                try:
+                    os.killpg(int(existing_pid), 0)
+                    LOG.info("Intake for %s already in progress (pid=%s); skipping selection", wid, existing_pid)
+                    return {"selected": None, "skipped": "already_running", "pid": existing_pid}
+                except ProcessLookupError:
+                    # Stale record — clear it and allow selection to proceed.
+                    dispatches.pop(wid, None)
+                except PermissionError:
+                    LOG.info(
+                        "Assuming intake %s already in progress (no permission to signal pid=%s); skipping",
+                        wid,
+                        existing_pid,
+                    )
+                    return {"selected": None, "skipped": "already_running", "pid": existing_pid}
+
+            LOG.info("Intake runner: selected candidate %s — %s", wid, selected.get("title") or selected.get("name") or "(no title)")
+
+            # Persist selection timestamp to store state for observability.
             state.setdefault("last_selected_at_by_item", {})
             state["last_selected_at_by_item"][wid] = dt.datetime.now(dt.timezone.utc).isoformat()
             store.update_state(spec.command_id, state)

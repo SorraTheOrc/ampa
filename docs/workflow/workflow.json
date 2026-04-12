@@ -52,12 +52,9 @@
     "stage": [
     "idea",
     "intake_complete",
-    "prd_complete",
     "plan_complete",
     "in_progress",
-    "delegated",
     "in_review",
-    "escalated",
     "done"
   ],
   "states": {
@@ -68,10 +65,6 @@
     "intake": {
       "status": "open",
       "stage": "intake_complete"
-    },
-    "prd": {
-      "status": "open",
-      "stage": "prd_complete"
     },
     "plan": {
       "status": "open",
@@ -89,450 +82,18 @@
       "status": "closed",
       "stage": "done"
     },
-    "delegated": {
-      "status": "in_progress",
-      "stage": "delegated"
-    },
-    "audit_passed": {
-      "status": "completed",
-      "stage": "done"
-    },
-    
-    "escalated": {
-      "status": "blocked",
-      "stage": "escalated"
-    },
     "blocked_in_progress": {
       "status": "blocked",
       "stage": "in_progress"
     },
-    "blocked_delegated": {
-      "status": "blocked",
-      "stage": "delegated"
-    }
   },
   "terminal_states": [
     "shipped"
   ],
   "invariants": [
-    {
-      "name": "requires_prd_link",
-      "description": "PRD URL must be present in description before planning can begin.",
-      "when": "pre",
-      "logic": "regex(description, \"PRD:\\\\s*https?://\")"
-    },
-    {
-      "name": "requires_tests",
-      "description": "Test plan link must exist before entering review.",
-      "when": "pre",
-      "logic": "regex(description, \"Test Plan:\\\\s*https?://\")"
-    },
-    {
-      "name": "requires_approvals",
-      "description": "At least one reviewer must have approved before closing.",
-      "when": "post",
-      "logic": "regex(comments, \"Approved by\\\\s+\\\\w+\")"
-    },
-    {
-      "name": "requires_work_item_context",
-      "description": "Work item must have a non-empty description with sufficient context for autonomous implementation. Checked before delegation.",
-      "when": "pre",
-      "logic": "length(description) > 100"
-    },
-    {
-      "name": "requires_acceptance_criteria",
-      "description": "Work item must contain acceptance criteria (checkbox list or explicit section) so the audit can verify completion.",
-      "when": "pre",
-      "logic": "regex(description, \"(?i)(acceptance criteria|\\\\- \\\\[[ x]\\\\])\")"
-    },
-    {
-      "name": "requires_stage_for_delegation",
-      "description": "Work item stage must be one of idea, intake_complete, or plan_complete before AMPA can delegate. Matches scheduler.py stage gate.",
-      "when": "pre",
-      "logic": "stage in [\"idea\", \"intake_complete\", \"plan_complete\"]"
-    },
-    {
-      "name": "not_do_not_delegate",
-      "description": "Work item must not be tagged do-not-delegate. Matches scheduler.py _is_do_not_delegate check.",
-      "when": "pre",
-      "logic": "\"do-not-delegate\" not in tags and \"do_not_delegate\" not in tags"
-    },
-    {
-      "name": "no_in_progress_items",
-      "description": "No other work items may be in_progress when delegating. Matches scheduler.py single-concurrency constraint.",
-      "when": "pre",
-      "logic": "count(work_items, status=\"in_progress\") == 0"
-    },
-    {
-      "name": "requires_audit_result",
-      "description": "An audit comment from the audit skill must exist on the work item confirming whether acceptance criteria are met.",
-      "when": "pre",
-      "logic": "regex(comments, \"(?i)AMPA Audit Result\")"
-    },
-    {
-      "name": "audit_recommends_closure",
-      "description": "The most recent audit comment must recommend closure (all acceptance criteria met). Checked before close_with_audit.",
-      "when": "pre",
-      "logic": "regex(comments, \"(?i)(can this item be closed\\\\?\\\\s*yes|all acceptance criteria.*(met|satisfied))\")"
-    },
-    {
-      "name": "audit_does_not_recommend_closure",
-      "description": "The most recent audit comment must NOT recommend closure (gaps found). Checked before escalation or retry.",
-      "when": "pre",
-      "logic": "regex(comments, \"(?i)can this item be closed\\\\?\\\\s*no\")"
-    }
   ],
   "commands": {
-    "intake": {
-      "description": "Capture intake details for a new idea. Expands the initial idea into a structured feature intake with motivation, user impact, and requirements. Maps to Workflow.md \"Intake\" step.",
-      "from": [
-        "idea"
-      ],
-      "to": "intake",
-      "actor": "PM",
-      "inputs": {
-        "summary": {
-          "type": "string",
-          "required": true,
-          "description": "Brief summary of the intake findings."
-        }
-      },
-      "effects": {
-        "add_tags": [
-          "intake"
-        ]
-      }
-    },
-    "author_prd": {
-      "description": "Produce a PRD draft and link it to the work item. Maps to Workflow.md \"Intake\" step (PRD authoring phase).",
-      "from": [
-        "intake"
-      ],
-      "to": "prd",
-      "actor": "PM",
-      "pre": [
-        "requires_prd_link"
-      ]
-    },
-    "plan": {
-      "description": "Decompose the work into sub-epics and features with acceptance criteria. Maps to Workflow.md \"Plan\" step.",
-      "from": [
-        "intake",
-        "prd"
-      ],
-      "to": "plan",
-      "actor": "PM",
-      "effects": {
-        "add_tags": [
-          "planned"
-        ]
-      }
-    },
-    "start_build": {
-      "description": "Begin manual implementation on a planned feature. Used when a human developer (not AMPA delegation) picks up work. Maps to Workflow.md \"Implementation\" step.",
-      "from": [
-        "plan"
-      ],
-      "to": "building",
-      "actor": "Patch",
-      "effects": {
-        "add_tags": [
-          "in_progress"
-        ]
-      }
-    },
-    "block": {
-      "description": "Mark a work item as blocked with a reason (from building state).",
-      "from": [
-        "building"
-      ],
-      "to": "blocked_in_progress",
-      "actor": "Patch",
-      "inputs": {
-        "reason": {
-          "type": "string",
-          "required": true,
-          "description": "Explanation of what is blocking progress."
-        }
-      }
-    },
-    "block_delegated": {
-      "description": "Mark a delegated work item as blocked with a reason.",
-      "from": [
-        "delegated"
-      ],
-      "to": "blocked_delegated",
-      "actor": "Patch",
-      "inputs": {
-        "reason": {
-          "type": "string",
-          "required": true,
-          "description": "Explanation of what is blocking progress."
-        }
-      }
-    },
-    "unblock": {
-      "description": "Resume building work after resolving a blocker.",
-      "from": [
-        "blocked_in_progress"
-      ],
-      "to": "building",
-      "actor": "Patch"
-    },
-    "unblock_delegated": {
-      "description": "Resume delegated work after resolving a blocker.",
-      "from": [
-        "blocked_delegated"
-      ],
-      "to": "delegated",
-      "actor": "Patch"
-    },
-    "submit_review": {
-      "description": "Submit completed work for code/feature review. Maps to Workflow.md \"PR Review\" step.",
-      "from": [
-        "building"
-      ],
-      "to": "review",
-      "actor": "Patch",
-      "pre": [
-        "requires_tests"
-      ]
-    },
-    "approve": {
-      "description": "Approve reviewed work and mark as done. Maps to Workflow.md \"Cleanup\" step. Requires human Producer approval.",
-      "from": [
-        "review",
-        "audit_passed"
-      ],
-      "to": "shipped",
-      "actor": "Producer",
-      "post": [
-        "requires_approvals"
-      ],
-      "effects": {
-        "set_needs_producer_review": false
-      }
-    },
-    "reopen": {
-      "description": "Reopen a closed item for follow-up work.",
-      "from": [
-        "shipped"
-      ],
-      "to": "plan",
-      "actor": "Producer"
-    },
-    "delegate": {
-      "description": "AMPA selects a work item via wl next and delegates it to a Patch agent with full context. The Patch agent works autonomously using the implement skill. Maps to scheduler.py _run_idle_delegation dispatch.",
-      "from": [
-        "idea",
-        "intake",
-        "plan"
-      ],
-      "to": "delegated",
-      "actor": "PM",
-      "pre": [
-        "requires_work_item_context",
-        "requires_acceptance_criteria",
-        "requires_stage_for_delegation",
-        "not_do_not_delegate",
-        "no_in_progress_items"
-      ],
-      "inputs": {
-        "work_item_id": {
-          "type": "string",
-          "required": true,
-          "description": "ID of the work item to delegate (from wl next)."
-        },
-        "action": {
-          "type": "string",
-          "required": true,
-          "description": "Delegation action determined by stage: intake (idea), plan (intake_complete), or implement (plan_complete).",
-          "enum": [
-            "intake",
-            "plan",
-            "implement"
-          ]
-        }
-      },
-      "prompt_ref": "prompts/delegate.md",
-      "dispatch_map": {
-        "idea": "opencode run \"/intake {id} do not ask questions\"",
-        "intake": "opencode run \"/plan {id}\"",
-        "plan": "opencode run \"work on {id} using the implement skill\""
-      },
-      "effects": {
-        "set_assignee": "Patch",
-        "add_tags": [
-          "delegated"
-        ],
-        "notifications": [
-          {
-            "channel": "discord",
-            "message": "Delegating '${action}' task for '${title}' (${id})"
-          }
-        ],
-        "audit": {
-          "record_prompt_hash": true,
-          "record_model": true,
-          "record_response_ids": true,
-          "record_agent_id": true
-        }
-      }
-    },
-    "complete_work": {
-      "description": "Patch agent reports that delegated work is complete. Transitions the work item from delegated back to building so it can proceed through the normal review flow.",
-      "from": [
-        "delegated"
-      ],
-      "to": "building",
-      "actor": "Patch",
-      "effects": {
-        "remove_tags": [
-          "delegated"
-        ],
-        "add_tags": [
-          "implementation_complete"
-        ]
-      }
-    },
-    "audit_result": {
-      "description": "AMPA runs the audit skill on a work item in review to verify acceptance criteria are met. The audit result determines whether to close or escalate. Implemented via the scheduler wiring to the audit poller and the descriptor-driven handlers in `ampa/audit_poller.py` and `ampa/audit/handlers.py`.",
-      "from": [
-        "review"
-      ],
-      "to": "audit_passed",
-      "actor": "QA",
-      "pre": [
-        "requires_audit_result"
-      ],
-      "inputs": {
-        "audit_output": {
-          "type": "string",
-          "required": true,
-          "description": "Full output from the audit skill execution."
-        },
-        "recommends_closure": {
-          "type": "boolean",
-          "required": true,
-          "description": "Whether the audit recommends closing the work item."
-        }
-      },
-      "prompt_ref": "prompts/audit.md",
-      "effects": {
-        "audit": {
-          "record_prompt_hash": true,
-          "record_model": true,
-          "record_response_ids": true,
-          "record_agent_id": true
-        }
-      }
-    },
-    "audit_fail": {
-      "description": "Record that an audit found unmet acceptance criteria. Work item stays open with documented gaps for retry or escalation.",
-      "from": [
-        "review"
-      ],
-        "to": {
-          "status": "in_progress",
-          "stage": "in_progress"
-        },
-      "actor": "QA",
-      "pre": [
-        "requires_audit_result",
-        "audit_does_not_recommend_closure"
-      ],
-        "effects": {}
-    },
-    "close_with_audit": {
-      "description": "Close a work item after a successful audit confirms all acceptance criteria are met. Sets needs-producer-review for final human approval. Maps to scheduler.py auto-completion: wl update --status completed --stage in_review.",
-      "from": [
-        "audit_passed"
-      ],
-      "to": {
-        "status": "completed",
-        "stage": "in_review"
-      },
-      "actor": "PM",
-      "pre": [
-        "audit_recommends_closure"
-      ],
-      "effects": {
-        "set_needs_producer_review": true,
-        "add_tags": [
-          "audit_closed"
-        ],
-        "notifications": [
-          {
-            "channel": "discord",
-            "message": "Audit Completed -- '${title}' ready for producer review"
-          }
-        ]
-      }
-    },
-    "escalate": {
-      "description": "Escalate a work item to a Producer when audit fails repeatedly or a critical issue is found that requires human judgment.",
-        "from": [
-        {
-          "status": "in_progress",
-          "stage": "in_progress"
-        },
-        "delegated"
-      ],
-      "to": "escalated",
-      "actor": "PM",
-      "inputs": {
-        "reason": {
-          "type": "string",
-          "required": true,
-          "description": "Explanation of why escalation is needed."
-        }
-      },
-      "effects": {
-        "set_assignee": "Producer",
-        "add_tags": [
-          "escalated"
-        ],
-        "notifications": [
-          {
-            "channel": "discord",
-            "message": "Escalation: '${title}' requires producer review -- ${reason}"
-          }
-        ]
-      }
-    },
-    "retry_delegation": {
-      "description": "Re-delegate a work item after an audit failure has been addressed. Moves the item back to a delegatable state.",
-        "from": [
-        {
-          "status": "in_progress",
-          "stage": "in_progress"
-        },
-        "escalated"
-      ],
-      "to": "plan",
-      "actor": "PM",
-      "effects": {
-        "remove_tags": [
-          "audit_failed",
-          "escalated"
-        ]
-      }
-    },
-    "de_escalate": {
-      "description": "Resolve an escalation and return the work item to a plannable state after Producer has reviewed and provided guidance.",
-      "from": [
-        "escalated"
-      ],
-      "to": "plan",
-      "actor": "Producer",
-      "effects": {
-        "remove_tags": [
-          "escalated"
-        ]
-      }
-    }
-  }
-  ,
+  },
   "assignment_map": {
     "default_assignee": "Build",
     "mappings": [
@@ -554,22 +115,22 @@
       {
         "states": ["open", "in-progress"],
         "stage": "in_review",
-        "assignee": "Patch"
+        "assignee": "Probe"
       },
       {
         "states": ["open", "in-progress"],
         "stage": "done",
-        "assignee": "Build"
+        "assignee": "Casey"
       },
       {
         "states": ["blocked"],
         "stage": "*",
-        "assignee": "Build"
+        "assignee": "Casey"
       },
       {
         "states": ["completed"],
         "stage": "*",
-        "assignee": "Build"
+        "assignee": "Casey"
       }
     ]
   }
