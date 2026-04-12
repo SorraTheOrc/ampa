@@ -33,15 +33,18 @@ Explain that a Discord bot token and channel ID are required for notifications f
 
 3. Install/Upgrade AMPA
 
-Run the installer from the repository root providing any configuration options we have been given. If no options have been given then run the installer with only the --yes flag.
+Always run the installer from the repository root (project root). This is important because the installer may start the local daemon and the daemon loads per-project configuration from `<projectRoot>/.worklog/ampa/.env` based on its working directory.
 
-If the prompt that triggered this skill indicates that we want to install or upgrade locally then run the installer with the `--local` flag.
+Run the installer from the repository root providing any configuration options we have been given. If no options have been given then run the installer with only the `--yes` flag.
 
-For example:
+If the prompt that triggered this skill indicates that we want to install or upgrade locally then run the installer with the `--local` flag and make sure your current working directory is the project root. For example:
 
 ```
-skill/install-ampa/scripts/install-worklog-plugin.sh --bot-token <discord_bot_token> --channel-id <discord_channel_id> --yes
+cd /path/to/your/project
+./skill/install-ampa/scripts/install-worklog-plugin.sh --local --bot-token <discord_bot_token> --channel-id <discord_channel_id> --yes
 ```
+
+If you run the installer from another directory (for example the skill directory) the daemon started by the installer may use that directory as its cwd and will not see the project's `.worklog/ampa/.env` file, causing startup to fail when required env vars are missing.
 
 Notes:
 
