@@ -240,11 +240,10 @@ class IntakeDispatcher:
         and delegates to the configured underlying runner.
         """
         ts = self._clock()
-        # Build the exact intake command required by the operator. The format
-        # must match the expected CLI: no surrounding quotes, sentence case,
-        # trailing period, and agent flag at the end.
+        # Build the canonical intake command using the --agent and --command
+        # flags as required by the runtime.
         intake_cmd = (
-            f"opencode run /intake {work_item_id} Do not ask questions. --agent Casey"
+            f"opencode run --agent Casey --command intake {work_item_id} do not ask questions"
         )
         LOG.info("IntakeDispatcher dispatching %s: %s", work_item_id, intake_cmd)
 

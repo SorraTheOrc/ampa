@@ -18,14 +18,14 @@ def test_intake_dispatch_builds_command_and_delegates():
     res = d.dispatch(command="ignored", work_item_id="WL-INTAKE-1")
 
     assert res.success is True
-    assert 'opencode run /intake WL-INTAKE-1 Do not ask questions. --agent Casey' in res.command
+    assert 'opencode run --agent Casey --command intake WL-INTAKE-1 do not ask questions' in res.command
 
 
 def test_intake_dispatch_respects_timeout_and_starts_timer():
     mock_runner = MagicMock()
     mock_result = DispatchResult(
         success=True,
-        command='opencode run /intake WL-TIMEOUT Do not ask questions. --agent Casey',
+        command='opencode run --agent Casey --command intake WL-TIMEOUT do not ask questions',
         work_item_id="WL-TIMEOUT",
         timestamp=None,
         pid=5555,
