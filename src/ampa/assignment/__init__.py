@@ -18,9 +18,33 @@ def _load_mapping_from_descriptor():
     descriptor_path = find_workflow_descriptor()
     if not descriptor_path:
         return {"default_assignee": "Build", "mappings": []}
-    with open(descriptor_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data.get("assignment_map", {"default_assignee": "Build", "mappings": []})
+
+    # Try loading the resolved descriptor first. If it contains an
+    # assignment_map, return it. Otherwise fall back to the packaged
+    # docs/workflow/workflow.json (module-local canonical) which may
+    # contain the mapping used by tests and defaults.
+    try:
+        with open(descriptor_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        data = {}
+
+    assignment = data.get("assignment_map")
+    if assignment:
+        return assignment
+
+    # fallback to module-local canonical descriptor
+    module_root = Path(__file__).resolve().parents[1]
+    module_docs = module_root / "docs" / "workflow" / "workflow.json"
+    if module_docs.is_file():
+        try:
+            with module_docs.open("r", encoding="utf-8") as f:
+                module_data = json.load(f)
+            return module_data.get("assignment_map", {"default_assignee": "Build", "mappings": []})
+        except Exception:
+            pass
+
+    return {"default_assignee": "Build", "mappings": []}
 
 
 _MAPPING = _load_mapping_from_descriptor()
