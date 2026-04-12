@@ -532,4 +532,45 @@
       }
     }
   }
+  ,
+  "assignment_map": {
+    "default_assignee": "Build",
+    "mappings": [
+      {
+        "states": ["open", "in-progress"],
+        "stage": "plan_complete",
+        "assignee": "Patch"
+      },
+      {
+        "states": ["open", "in-progress"],
+        "stage": "intake_complete",
+        "assignee": "Archie"
+      },
+      {
+        "states": ["open", "in-progress"],
+        "stage": "idea",
+        "assignee": "Map"
+      },
+      {
+        "states": ["open", "in-progress"],
+        "stage": "in_review",
+        "assignee": "Patch"
+      },
+      {
+        "states": ["open", "in-progress"],
+        "stage": "done",
+        "assignee": "Build"
+      },
+      {
+        "states": ["blocked"],
+        "stage": "*",
+        "assignee": "Build"
+      },
+      {
+        "states": ["completed"],
+        "stage": "*",
+        "assignee": "Build"
+      }
+    ]
+  }
 }
