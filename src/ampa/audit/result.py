@@ -72,7 +72,7 @@ class AuditResult:
         acceptance_criteria: Per-criterion evaluation results.
         recommends_closure: Whether the audit recommends the work item
             can be closed (all acceptance criteria met).
-        raw_output: The full raw output from ``opencode run "/audit {id}"``.
+        raw_output: The full raw output from ``opencode run --command audit {id}``.
         report_text: The extracted report text (between markers).
         closure_reason: Human-readable reason for the closure
             recommendation (from the ``## Recommendation`` section).
@@ -295,7 +295,7 @@ def _detect_closure_recommendation(report: str) -> bool:
 
 
 def parse_audit_output(raw_output: str) -> AuditParseResult:
-    """Parse raw ``opencode run "/audit {id}"`` output into an ``AuditResult``.
+    """Parse raw ``opencode run --command audit {id}`` output into an ``AuditResult``.
 
     Extracts the structured report from between the markers, then parses
     the ``## Summary``, ``## Acceptance Criteria Status``, and

@@ -94,7 +94,7 @@ def test_scheduler_audit_routes_to_descriptor_handlers(tmp_path, monkeypatch):
             )
             return subprocess.CompletedProcess(cmd, 0, out, "")
 
-        if cmd_s.startswith(f'opencode run "/audit {work_id}"'):
+        if cmd_s.startswith(f'opencode run @delegate(to: "probe") audit {work_id} using the audit skill'):
             out = (
                 "--- AUDIT REPORT START ---\n"
                 "## Summary\n\nLooks good.\n\n"
@@ -142,7 +142,9 @@ def test_scheduler_audit_routes_to_descriptor_handlers(tmp_path, monkeypatch):
     sched.start_command(spec)
 
     assert any(c.startswith("wl list --stage in_review --json") for c in calls)
-    assert any(f'/audit {work_id}' in c for c in calls)
+    # Expect the scheduler to invoke the audit skill using the exact
+    # delegated prompt the audit skill expects.
+    assert any(f'opencode run @delegate(to: "probe") audit {work_id} using the audit skill' in c for c in calls)
     assert any(c.startswith(f"wl comment add {work_id}") for c in calls)
     assert any(c.startswith(f"wl update {work_id}") and ("--stage done" in c) for c in calls)
     assert any(c.startswith("gh pr view 42 --repo example/repo --json merged") for c in calls)
@@ -220,7 +222,7 @@ def test_scheduler_audit_non_closure_notification_has_failed_criteria(
             )
             return subprocess.CompletedProcess(cmd, 0, out, "")
 
-        if cmd_s.startswith(f'opencode run "/audit {work_id}"'):
+        if cmd_s.startswith(f'opencode run @delegate(to: "probe") audit {work_id} using the audit skill'):
             out = (
                 "--- AUDIT REPORT START ---\n"
                 "## Summary\n\nHas gaps.\n\n"
