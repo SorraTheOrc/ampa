@@ -33,9 +33,15 @@ def _load_mapping_from_descriptor():
     if assignment:
         return assignment
 
-    # fallback to module-local canonical descriptor
-    module_root = Path(__file__).resolve().parents[1]
-    module_docs = module_root / "docs" / "workflow" / "workflow.json"
+    # fallback to repository-level canonical docs/workflow/workflow.json.
+    # Ascend from this file to the repository root and look for docs/workflow/workflow.json.
+    repo_root = Path(__file__).resolve()
+    # climb up a few levels to find repo root (this file is at src/ampa/assignment)
+    if len(repo_root.parents) >= 4:
+        repo_root = repo_root.parents[3]
+    else:
+        repo_root = repo_root.parents[-1]
+    module_docs = repo_root / "docs" / "workflow" / "workflow.json"
     if module_docs.is_file():
         try:
             with module_docs.open("r", encoding="utf-8") as f:
