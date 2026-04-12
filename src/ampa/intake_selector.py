@@ -1,7 +1,7 @@
 """Query and select intake candidates from Worklog.
 
 Provides a small, focused IntakeCandidateSelector that executes
-`wl list --stage idea --json`, parses the JSON output, and returns the
+`wl next --stage idea --json`, parses the JSON output, and returns the
 single highest-priority candidate (by numeric `sortIndex`, descending).
 
 The module mirrors patterns used by the audit poller: defensive JSON
@@ -35,14 +35,14 @@ class IntakeCandidateSelector:
     cwd: str
 
     def query_candidates(self, timeout: int = 60) -> Optional[List[Dict[str, Any]]]:
-        """Run `wl list --stage idea --json` and return a list of work item dicts.
+        """Run `wl next --stage idea --json` and return a list of work item dicts.
 
         Returns None on query failure (non-zero exit or invalid JSON). An
         empty list means query succeeded but no "idea" items were found.
         """
         try:
             proc = self.run_shell(
-                "wl list --stage idea --json",
+                "wl next --stage idea --json",
                 shell=True,
                 check=False,
                 capture_output=True,
@@ -51,17 +51,17 @@ class IntakeCandidateSelector:
                 timeout=timeout,
             )
         except Exception:
-            LOG.exception("wl list --stage idea command failed to execute")
+            LOG.exception("wl next --stage idea command failed to execute")
             return None
 
         if proc.returncode != 0:
-            LOG.warning("wl list --stage idea exited with code %s: %s", proc.returncode, proc.stderr)
+            LOG.warning("wl next --stage idea exited with code %s: %s", proc.returncode, proc.stderr)
             return None
 
         try:
             raw = json.loads(proc.stdout or "null")
         except Exception:
-            LOG.exception("Failed to parse wl list --stage idea output as JSON")
+            LOG.exception("Failed to parse wl next --stage idea output as JSON")
             return None
 
         items: List[Dict[str, Any]] = []

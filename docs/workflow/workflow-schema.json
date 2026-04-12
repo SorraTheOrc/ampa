@@ -57,6 +57,28 @@
       "minProperties": 1,
       "description": "Map of command definitions keyed by command name. Command names should be imperative verbs (e.g., intake, plan, delegate)."
     }
+    ,
+    "assignment_map": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default_assignee": { "type": "string" },
+        "mappings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["states", "stage", "assignee"],
+            "additionalProperties": false,
+            "properties": {
+              "states": { "type": "array", "items": { "type": "string" } },
+              "stage": { "type": "string" },
+              "assignee": { "type": "string" }
+            }
+          }
+        }
+      },
+      "description": "Optional deterministic mapping from (state, stage) to assignee used by the scheduler."
+    }
   },
   "$defs": {
     "Metadata": {
