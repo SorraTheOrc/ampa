@@ -134,6 +134,12 @@ For support, please:
 2. Open an issue on GitHub
 3. Join our Discord community
 
+## Worklog Status: input_needed
+
+AMPA and the intake automation use a status value `input_needed` to indicate work items which require additional information from the requester. This status is orthogonal to stages (idea, intake_complete, plan_complete, etc.) and can be used by automation and operators to track items awaiting requester input.
+
+See `docs/operator-guide-input-needed.md` and `docs/developer-guide-status-integration.md` for details on how to handle and integrate the new status.
+
 ---
 
 **AMPA** - Automating project management so you can focus on what matters.
