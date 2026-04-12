@@ -35,6 +35,8 @@ Explain that a Discord bot token and channel ID are required for notifications f
 
 Run the installer from the repository root providing any configuration options we have been given. If no options have been given then run the installer with only the --yes flag.
 
+If the prompt that triggered this skill indicates that we want to install or upgrade locally then run the installer with the `--local` flag.
+
 For example:
 
 ```
