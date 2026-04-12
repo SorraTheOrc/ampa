@@ -1,38 +1,41 @@
-# Operator Guide: Handling "input_needed" Status
+# Operator Guide: Handling work items with status `input_needed`
 
 This document explains how operators should handle work items marked with the `input_needed` status.
 
-When an automated intake or an operator identifies that a work item lacks the information required to proceed, the work item should be set to the `input_needed` status and questions should be recorded on the work item.
+When to use `input_needed`:
+- The status indicates the intake process or an agent has determined a work item lacks necessary information from the requester and cannot progress.
+- It is set when an automated intake or human reviewer needs additional details (requirements, repro steps, attachments, scope clarification).
 
-Operator responsibilities
+Key principles:
+- `input_needed` is a status, not a stage. A work item may be in any stage while having this status.
+- Treat `input_needed` as a blocker for automatic progression: intake runners and automated assignment should not advance items while this status is set.
 
-- Review open work items with `status: input_needed` regularly. Use `wl list --status input_needed` to find them.
-- Read the open questions recorded in the work item comments and, if possible, contact the requester to obtain the missing information.
-- When the requester provides the required information, update the work item by:
-  - Adding the information to the work item description or comments
-  - Clearing or resolving the open questions
-  - Setting the status back to `open` or another appropriate status (`in-progress`, etc.) using `wl update <id> --status open`
+Operator workflow:
+1. Triage list: Use `wl list --status input_needed` to surface items awaiting requester input.
+2. Review questions: Open the work item and read the open questions section (agents or humans should add explicit questions in the comments or work item body).
+3. Contact requester: Reach out to the requester via the channel used to create the request (email, issue comment, or ticketing system) and ask for the missing information.
+4. Update the item: When the requester supplies the information, add it to the work item (comments or attachments) and remove `input_needed` by running:
 
-Notes for intake automation
+```
+wl update <id> --status open
+```
 
-- Automated intake processes (for example, the scheduled `intake-runner`) may set the `input_needed` status when the intake interview yields unresolved questions.
-- The automation should create explicit open questions as comments so operators and requesters can see what is missing.
+Or set an appropriate status consistent with your workflow (for example `in-progress` or `open`).
 
-Example workflow
+5. Continue intake: The intake automation or operator should then rerun the intake process or manually advance the stage to `intake_complete` when appropriate.
 
-1. Intake process runs and discovers missing fields A and B.
-2. Automation records questions in the work item comments and sets `--status input_needed`.
-3. Operator reviews `wl list --status input_needed`, opens the work item and triages.
-4. Operator or requester answers the questions in comments and updates the description.
-5. Operator sets `wl update <id> --status open` to return the item to the normal workflow.
+Best practices:
+- Keep questions specific and actionable.
+- Prefer editing the existing work item with new information rather than creating new items.
+- If a requester is unresponsive for a long time, add a comment summarising attempts to contact and set a reminder or follow-up policy.
 
-Troubleshooting
+Troubleshooting:
+- If `wl list --status input_needed` returns no results but automation reported input-needed during intake, verify the intake logs and agent comments for the item id.
+- If automation repeatedly sets `input_needed` for the same item, inspect the intake transcript to determine if the automation expects a different form or format of information. Consider escalating to developers if the intake rules are ambiguous.
 
-- If many items are stuck in `input_needed`, review the intake script for overly strict validation.
-- If requesters do not respond, consider adding a follow-up comment tagging the requester and setting a reminder or creating a follow-up work item.
-
-Related commands
-
+Related commands:
 - `wl list --status input_needed`
-- `wl show <id>`
+- `wl show <id> --children --json`
 - `wl update <id> --status open`
+
+See also: docs/developer-guide-status-integration.md
