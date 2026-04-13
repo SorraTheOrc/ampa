@@ -278,6 +278,7 @@ def _from_iso(value: Optional[str]) -> Optional[dt.datetime]:
 def _filter_by_cooldown(
     candidates: List[Dict[str, Any]],
     last_audit_by_item: Dict[str, str],
+    last_attempt_by_item: Dict[str, str],
     cooldown_hours: int,
     now: dt.datetime,
 ) -> List[Dict[str, Any]]:
@@ -286,14 +287,21 @@ def _filter_by_cooldown(
     For each candidate, look up ``last_audit_at_by_item[item_id]`` from the
     scheduler store state.  If ``(now - last_audit_at) < cooldown_hours`` the
     candidate is skipped.  Items exactly at the cooldown boundary **are**
-    eligible (exclusive comparison).  Items with no store entry are always
-    eligible.
+    eligible (exclusive comparison).
+
+    When ``last_audit_at`` is ``None`` (never successfully audited), the
+    cooldown check falls back to ``last_attempt_at`` to prevent repeatedly
+    hammering an item whose handler keeps failing without returning
+    ``invalid_from_state``.
 
     Args:
         candidates: Work item dicts as returned by :func:`_query_candidates`.
         last_audit_by_item: Mapping of work item ID to ISO-8601 timestamp
             string, as persisted in the scheduler store under the key
             ``last_audit_at_by_item``.
+        last_attempt_by_item: Mapping of work item ID to ISO-8601 timestamp
+            string, as persisted in the scheduler store under the key
+            ``last_attempt_at_by_item``.
         cooldown_hours: Minimum hours between audits for the same item.
         now: Current UTC datetime used for comparison.
 
@@ -313,6 +321,11 @@ def _filter_by_cooldown(
         if last_audit_iso:
             last_audit = _from_iso(last_audit_iso)
 
+        last_attempt_iso = last_attempt_by_item.get(wid)
+        last_attempt = None
+        if last_attempt_iso:
+            last_attempt = _from_iso(last_attempt_iso)
+
         # If the item has been updated since the last successful audit,
         # consider it eligible immediately regardless of cooldown. This
         # implements: "audit any item that has been modified since the
@@ -328,7 +341,11 @@ def _filter_by_cooldown(
             eligible.append(item)
             continue
 
-        if last_audit is not None and (now - last_audit) < cooldown_delta:
+        # Apply cooldown based on last_audit if available, otherwise fall
+        # back to last_attempt to avoid hammering items that have never
+        # been successfully audited.
+        effective_ref = last_audit if last_audit is not None else last_attempt
+        if effective_ref is not None and (now - effective_ref) < cooldown_delta:
             continue
 
         eligible.append(item)
@@ -480,8 +497,14 @@ def poll_and_handoff(
     if not isinstance(last_audit_by_item, dict):
         last_audit_by_item = {}
 
+    last_attempt_by_item = state.get("last_attempt_at_by_item", {})
+    if not isinstance(last_attempt_by_item, dict):
+        last_attempt_by_item = {}
+
     # 4. Filter by cooldown
-    eligible = _filter_by_cooldown(candidates, last_audit_by_item, cooldown_hours, now)
+    eligible = _filter_by_cooldown(
+        candidates, last_audit_by_item, last_attempt_by_item, cooldown_hours, now
+    )
 
     # Exclude items that have repeatedly failed due to invalid_from_state
     # to avoid noisy selection loops. The store keeps a per-item counter
@@ -658,6 +681,10 @@ def poll_and_handoff(
             state.setdefault("last_audit_at_by_item", {})
             state["last_audit_at_by_item"][work_id] = now.isoformat()
         else:
+            # Record the failure reason for diagnostics
+            state.setdefault("last_failure_reason_by_item", {})[work_id] = (
+                handler_result_reason or "handler_returned_false"
+            )
             # If the handler failed and reported an invalid_from_state
             # reason, increment the per-item counter so we can backoff
             # selection in future cycles.
