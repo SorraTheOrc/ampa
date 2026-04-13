@@ -68,6 +68,42 @@ poetry install
 poetry run pytest
 ```
 
+### Running Tests
+
+From the repository root you can run the test suite in a few ways:
+
+- Recommended (uses Poetry):
+
+```bash
+# run the full test suite (quiet output)
+poetry run pytest -q
+```
+
+- If you don't use Poetry, run pytest directly from a virtualenv:
+
+```bash
+# activate your virtualenv, then:
+python -m pytest -q
+```
+
+- Run a single test file:
+
+```bash
+pytest tests/test_some_module.py -q
+```
+
+- Run tests matching an expression (keyword):
+
+```bash
+pytest -k "keyword" -q
+```
+
+Notes:
+
+- Tests live in the `tests/` directory and pytest configuration is in `pyproject.toml`.
+- Run commands from the repository root so pytest picks up the project configuration.
+- If you need coverage, run: `poetry run pytest --cov` (requires the coverage plugin).
+
 ### Project Structure
 
 ```

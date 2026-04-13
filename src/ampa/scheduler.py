@@ -74,6 +74,7 @@ from .engine_factory import build_engine  # noqa: E402
 # ---------------------------------------------------------------------------
 from .delegation import DelegationOrchestrator  # noqa: E402
 import hashlib
+import re
 
 from .scheduler_helpers import (  # noqa: E402
     clear_stale_running_states as _clear_stale_running_states,
@@ -352,6 +353,36 @@ class Scheduler:
                 continue
             eligible.append(spec)
         return eligible
+
+    @staticmethod
+    def _cleanup_old_audits(audit_dir: str, max_age_days: int = 7) -> None:
+        """Delete audit files older than max_age_days from audit_dir.
+
+        Best-effort cleanup: log errors but do not raise to avoid impacting
+        the main scheduler flow.
+        """
+        try:
+            if not audit_dir or not os.path.isdir(audit_dir):
+                return
+            cutoff = dt.datetime.utcnow() - dt.timedelta(days=max_age_days)
+            for name in os.listdir(audit_dir):
+                if not isinstance(name, str):
+                    continue
+                path = os.path.join(audit_dir, name)
+                try:
+                    if not os.path.isfile(path):
+                        continue
+                    mtime = dt.datetime.utcfromtimestamp(os.path.getmtime(path))
+                    if mtime < cutoff:
+                        try:
+                            os.remove(path)
+                            LOG.info("Removed old audit file: %s", path)
+                        except Exception:
+                            LOG.exception("Failed to remove old audit file: %s", path)
+                except Exception:
+                    LOG.exception("Error inspecting audit file: %s", path)
+        except Exception:
+            LOG.exception("Audit retention cleanup failed")
 
     def select_next(self, now: Optional[dt.datetime] = None) -> Optional[CommandSpec]:
         now = now or _utc_now()
@@ -678,15 +709,27 @@ class Scheduler:
 
                 def _audit_handler(work_item: dict) -> bool:
                     """Execute descriptor-driven audit lifecycle for one item."""
-                    def _send_audit_notification(
+                    # Persist full audit markdown to disk and notify the bot.
+                    # Extracted into a module-local helper so tests can assert
+                    # the on-disk behaviour and payload formation.
+                    def _persist_audit_and_notify(
                         *,
                         message_type: str,
                         title_base: str,
                         work_item_id_local: str,
                         summary_markdown: str,
                         full_report_markdown: str,
+                        ready_value: str | None = None,
                     ) -> None:
-                        """Send audit summary inline plus full report attachment."""
+                        """Write full_report_markdown to .worklog/audit and notify.
+
+                        The notification payload includes a concise inline summary
+                        (kept under Discord limits) and an attachment that points
+                        to the persisted file path. The message body also prints
+                        the filesystem path using the pattern
+                        `.worklog/audit/audit-<id>-<timestamp>.md` so operators
+                        can easily open the saved report.
+                        """
                         title_with_id_local = f"{title_base} [{work_item_id_local}]"
                         summary_md = (summary_markdown or "").strip()
                         full_md_local = (full_report_markdown or "").strip()
@@ -695,6 +738,26 @@ class Scheduler:
                         if not full_md_local:
                             full_md_local = summary_md
 
+                        # Persist full markdown to a discoverable project-local
+                        # path: .worklog/audit/audit-<id>-<ts>.md
+                        try:
+                            audit_dir = os.path.join(os.getcwd(), ".worklog", "audit")
+                            os.makedirs(audit_dir, exist_ok=True)
+                            timestamp = dt.datetime.utcnow().strftime("%Y-%m-%dT%H%M%SZ")
+                            # Persist to a timestamped file on disk so operators can
+                            # easily find the saved report. However tests (and the
+                            # notifier payload) expect a stable, short attachment
+                            # filename when the message is composed, so keep the
+                            # on-disk name separate from the attachment filename.
+                            disk_filename = f"audit-{work_item_id_local}-{timestamp}.md"
+                            full_path = os.path.join(audit_dir, disk_filename)
+                            with open(full_path, "w", encoding="utf-8") as fh:
+                                fh.write(full_md_local)
+                        except Exception:
+                            LOG.exception("Failed to persist full audit markdown to disk")
+                            # Fall back to in-memory attachment when persistence fails
+                            full_path = None
+
                         # Keep inline summary readable and under Discord's 2000-char limit.
                         max_inline_chars = 1800
                         inline_md = (
@@ -702,15 +765,41 @@ class Scheduler:
                             if len(summary_md) <= max_inline_chars
                             else summary_md[: max_inline_chars - 3] + "..."
                         )
-                        content = f"# {title_with_id_local}\n\n```md\n{inline_md}\n```"
-                        attachment = {
-                            "filename": f"audit-{work_item_id_local}.md",
-                            "content": full_md_local,
-                        }
+
+                        # Include explicit ready-to-close token when provided so
+                        # Discord messages always contain a machine-friendly
+                        # one-line statement in a predictable location.
+                        if ready_value:
+                            ready_line = f"- Ready to close: {ready_value}"
+                            content = f"# {title_with_id_local}\n\n{ready_line}\n\n```md\n{inline_md}\n```"
+                        else:
+                            content = f"# {title_with_id_local}\n\n```md\n{inline_md}\n```"
+                        if full_path:
+                            # Include the filesystem path in the message body for
+                            # operator convenience, but send a small stable
+                            # attachment filename (without the timestamp) and
+                            # include the full report as inline content so
+                            # test hooks and lightweight notifiers can inspect
+                            # the payload without reading from disk.
+                            content = content + f"\n\nFull audit saved: {full_path}"
+                            attachment = {
+                                "filename": f"audit-{work_item_id_local}.md",
+                                "path": full_path,
+                                "content": full_md_local,
+                            }
+                        else:
+                            # Fall back to inline content when disk write failed
+                            attachment = {"filename": f"audit-{work_item_id_local}.md", "content": full_md_local}
+
                         payload = {"content": content, "attachments": [attachment]}
-                        notifications_module.notify(
-                            "", payload=payload, message_type=message_type
-                        )
+                        notifications_module.notify("", payload=payload, message_type=message_type)
+
+                        # Run retention cleanup on the audit directory to delete
+                        # files older than 7 days (best-effort, non-fatal).
+                        try:
+                            Scheduler._cleanup_old_audits(os.path.join(os.getcwd(), ".worklog", "audit"), max_age_days=7)
+                        except Exception:
+                            LOG.exception("Failed to run audit retention cleanup")
 
                     work_item_id = str(work_item.get("id") or "")
                     if not work_item_id:
@@ -736,12 +825,16 @@ class Scheduler:
                                 (result.metadata or {}).get("audit_report_markdown")
                                 or summary_md
                             )
-                            _send_audit_notification(
+                            # Extract Ready token from the discord_summary/details
+                            m = re.search(r"- Ready to close:\s*(YES|NO)", summary_md)
+                            ready = m.group(1) if m else None
+                            _persist_audit_and_notify(
                                 message_type="error",
                                 title_base=title_base,
                                 work_item_id_local=work_item_id,
                                 summary_markdown=summary_md,
                                 full_report_markdown=full_md,
+                                ready_value=ready,
                             )
                         except Exception:
                             LOG.exception("Failed to send audit failure notification")
@@ -754,12 +847,16 @@ class Scheduler:
                             (result.metadata or {}).get("audit_report_markdown")
                             or summary_md
                         )
-                        _send_audit_notification(
+                        # Extract Ready token from the discord_summary/details
+                        m = re.search(r"- Ready to close:\s*(YES|NO)", summary_md)
+                        ready = m.group(1) if m else None
+                        _persist_audit_and_notify(
                             message_type="command",
                             title_base=title_base,
                             work_item_id_local=work_item_id,
                             summary_markdown=summary_md,
                             full_report_markdown=full_md,
+                            ready_value=ready,
                         )
                     except Exception:
                         LOG.exception("Failed to send audit summary notification")
