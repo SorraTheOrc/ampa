@@ -63,6 +63,7 @@ from .scheduler_executor import (  # noqa: E402
     score_command,
 )
 
+
 from .bot_supervisor import BotSupervisor  # noqa: E402
 
 from .engine_factory import build_engine  # noqa: E402

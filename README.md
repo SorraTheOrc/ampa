@@ -112,6 +112,10 @@ When Discord integration is enabled, AMPA responds to various commands:
 - `!ampa health` - Show project health metrics
 - `!ampa tasks` - List scheduled tasks
 
+### Audit attachments
+
+Audit notifications include the full audit markdown as an attachment payload (in-memory). There is no persistence to a project-local filesystem path by default.
+
 ## Contributing
 
 Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.

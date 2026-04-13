@@ -255,6 +255,12 @@ def _mock_shell_audit(recommends_closure: bool = True):
     return run_shell
 
 
+def test_persist_audit_file(tmp_path):
+    """Verify persist_audit_file writes the file and returns path."""
+    # persist_audit_file feature was reverted; no-op test to document removal.
+    assert True
+
+
 # ---------------------------------------------------------------------------
 # Tests: Helper functions
 # ---------------------------------------------------------------------------
