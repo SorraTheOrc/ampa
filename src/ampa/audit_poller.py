@@ -278,9 +278,9 @@ def _from_iso(value: Optional[str]) -> Optional[dt.datetime]:
 def _filter_by_cooldown(
     candidates: List[Dict[str, Any]],
     last_audit_by_item: Dict[str, str],
-    last_attempt_by_item: Dict[str, str],
     cooldown_hours: int,
     now: dt.datetime,
+    last_attempt_by_item: Optional[Dict[str, str]] = None,
 ) -> List[Dict[str, Any]]:
     """Filter candidates by store-based cooldown.
 
@@ -308,6 +308,11 @@ def _filter_by_cooldown(
     Returns:
         A list of candidates that have passed the cooldown check.
     """
+    # Treat a missing last_attempt_by_item as an empty map for callers that
+    # don't supply it (tests and some callers historically omit this).
+    if last_attempt_by_item is None:
+        last_attempt_by_item = {}
+
     cooldown_delta = dt.timedelta(hours=cooldown_hours)
     eligible: List[Dict[str, Any]] = []
 
@@ -503,7 +508,11 @@ def poll_and_handoff(
 
     # 4. Filter by cooldown
     eligible = _filter_by_cooldown(
-        candidates, last_audit_by_item, last_attempt_by_item, cooldown_hours, now
+        candidates,
+        last_audit_by_item,
+        cooldown_hours,
+        now,
+        last_attempt_by_item=last_attempt_by_item,
     )
 
     # Exclude items that have repeatedly failed due to invalid_from_state

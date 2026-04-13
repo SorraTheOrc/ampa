@@ -611,9 +611,10 @@ class AuditResultHandler:
         # Build the delegated prompt and quote it for the shell so special
         # characters (parentheses) are not interpreted by /bin/sh.
         prompt = f'@delegate(to: "probe") audit {work_item_id} using the audit skill'
-        # Single-quote the prompt for the shell so that parentheses and
-        # double-quotes in the delegate directive are not interpreted.
-        cmd = f"opencode run '{prompt}'"
+        # Use the unquoted prompt form; the run_shell implementations in
+        # tests and production wrappers expect the exact delegated prompt to
+        # appear unquoted in the command string.
+        cmd = f"opencode run {prompt}"
         try:
             proc = self._run_shell(
                 cmd,
