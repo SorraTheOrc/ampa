@@ -956,7 +956,57 @@ class PRMonitorRunner:
             f"discovered-from:SA-0MMJY1K3W15RI0F4\n\n"
             f"_Created automatically by AMPA PR Monitor._"
         )
-        self._create_critical_work_item(wl_title, wl_desc)
+        # Before creating a new work item, check whether a work item that
+        # references this PR already exists to avoid creating duplicates.
+        try:
+            proc = self._wl_shell(
+                f"wl search 'PR #{pr_number}' --json",
+                shell=True,
+                check=False,
+                capture_output=True,
+                text=True,
+                cwd=self.command_cwd,
+            )
+            if proc.returncode == 0 and (proc.stdout or "").strip():
+                try:
+                    items = json.loads(proc.stdout.strip())
+                    if isinstance(items, list) and items:
+                        wid = items[0].get("id")
+                        if wid:
+                            LOG.info(
+                                "pr-monitor: existing work item %s found for PR #%d — adding comment",
+                                wid,
+                                pr_number,
+                            )
+                            # Add a comment to the existing work item instead
+                            self._wl_shell(
+                                f'wl comment add {wid} --comment "{wl_desc}" '
+                                f'--author "ampa-pr-monitor" --json',
+                                shell=True,
+                                check=False,
+                                capture_output=True,
+                                text=True,
+                                cwd=self.command_cwd,
+                            )
+                            # Skip creating a duplicate work item
+                            created_wid = None
+                        else:
+                            created_wid = self._create_critical_work_item(wl_title, wl_desc)
+                    else:
+                        created_wid = self._create_critical_work_item(wl_title, wl_desc)
+                except Exception:
+                    LOG.exception(
+                        "pr-monitor: failed to parse wl search output — proceeding to create work item"
+                    )
+                    created_wid = self._create_critical_work_item(wl_title, wl_desc)
+            else:
+                # No existing item found (or search failed) — create one.
+                created_wid = self._create_critical_work_item(wl_title, wl_desc)
+        except Exception:
+            LOG.exception(
+                "pr-monitor: exception while checking for existing work items — creating new item"
+            )
+            created_wid = self._create_critical_work_item(wl_title, wl_desc)
 
         # Post GitHub PR comment about failure
         comment_body = (
