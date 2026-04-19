@@ -445,6 +445,51 @@ def _format_run_result_human(
     lines.append(f"Finished:  {run.end_ts.astimezone().strftime('%d-%b-%Y %H:%M:%S')}")
     lines.append(f"Duration:  {run.duration_seconds:.3f}s")
 
+    # Special-case: include a concise intake-runner summary in the normal
+    # human display so `wl ampa run intake-runner` surfaces what (if any)
+    # item was selected or why selection was skipped. The detailed output
+    # remains accessible via the 'full' format or JSON output.
+    try:
+        if spec.command_id == "intake-runner" or spec.command_type == "intake-runner":
+            intake_line = None
+            # Prefer structured metadata pushed by the scheduler when available
+            if getattr(run, "metadata", None) and isinstance(run.metadata.get("intake_runner"), dict):
+                im = run.metadata.get("intake_runner")
+                sel = im.get("selected")
+                if sel:
+                    dispatch = im.get("dispatch")
+                    intake_line = f"Selected:  {sel}"
+                    if dispatch is not None:
+                        intake_line += f" (dispatch_success={str(bool(dispatch)).lower()})"
+                else:
+                    parts = ["Selected:  None"]
+                    extras = []
+                    if im.get("error"):
+                        extras.append(f"error={im.get('error')}")
+                    if im.get("skipped"):
+                        extras.append(f"skipped={im.get('skipped')}")
+                    if im.get("stage"):
+                        extras.append(f"stage={im.get('stage')}")
+                    if im.get("status"):
+                        extras.append(f"status={im.get('status')}")
+                    if im.get("next_attempt"):
+                        extras.append(f"next_attempt={im.get('next_attempt')}")
+                    if im.get("pid"):
+                        extras.append(f"pid={im.get('pid')}")
+                    if extras:
+                        intake_line = parts[0] + " (" + ", ".join(extras) + ")"
+                    else:
+                        intake_line = parts[0]
+            elif output:
+                # Fallback: use the first output line when metadata absent
+                first = output.splitlines()[0] if output else output
+                intake_line = f"Selected:  {first}"
+            if intake_line:
+                lines.append(intake_line)
+    except Exception:
+        # Best-effort only: don't let display formatting fail
+        pass
+
     if run.metadata and isinstance(run.metadata.get("delegation"), dict):
         deleg = run.metadata["delegation"]
         if deleg.get("dispatched"):

@@ -80,6 +80,17 @@ class IntakeCandidateSelector:
                         items.extend([it for it in v if isinstance(it, dict)])
                         break
 
+            # Accept single-item wrappers commonly returned by `wl next` such
+            # as {"workItem": {...}} or {"work_item": {...}} or {"item": {...}}.
+            # Treat a single workItem dict as a one-element list so callers do not
+            # miss candidates when the CLI returns a single wrapped object.
+            if not items:
+                for single_key in ("workItem", "work_item", "item"):
+                    val = raw.get(single_key)
+                    if isinstance(val, dict):
+                        items.append(val)
+                        break
+
         # Normalize id/key
         normalized: List[Dict[str, Any]] = []
         for it in items:
