@@ -240,6 +240,9 @@ def ensure_audit_command(store: SchedulerStore) -> None:
         LOG.exception("Failed to auto-register audit command")
 
 
+_LEGACY_INTAKE_COMMAND_ID = "intake-selector"
+
+
 def ensure_intake_runner_command(store: SchedulerStore) -> None:
     """Register the intake-runner command if absent.
 
@@ -247,12 +250,24 @@ def ensure_intake_runner_command(store: SchedulerStore) -> None:
     idea-stage items, dispatches /intake sessions, monitors completion,
     and records metrics. It can be disabled via metadata.enabled = False.
     Auto-registration is skipped for in-memory/test stores.
+
+    Also removes the legacy ``intake-selector`` command if present, which
+    was the predecessor to intake-runner and is no longer used.
     """
     try:
         store_path = getattr(store, "path", None)
         if store_path == ":memory:":
             LOG.debug("Skipping intake-runner auto-registration for in-memory store")
             return
+        existing = store.list_commands()
+        # Migrate: remove the legacy intake-selector command if still present.
+        for cmd in existing:
+            if cmd.command_id == _LEGACY_INTAKE_COMMAND_ID:
+                store.remove_command(_LEGACY_INTAKE_COMMAND_ID)
+                LOG.info(
+                    "Removed legacy intake-selector command (superseded by intake-runner)"
+                )
+                break
         existing = store.list_commands()
         for cmd in existing:
             if cmd.command_id == _INTAKE_RUNNER_COMMAND_ID:
