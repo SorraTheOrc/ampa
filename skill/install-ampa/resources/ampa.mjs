@@ -257,10 +257,14 @@ async function resolveCommand(cliCmd, projectRoot) {
     const wf = discoverWorkflowDescriptor(projectRoot, pyPath);
     const env = { PYTHONPATH: pyPath, AMPA_RUN_SCHEDULER: '1' };
     if (wf) env.AMPA_WORKFLOW_DESCRIPTOR = wf;
+    // Per-project config: .env is always loaded from <projectRoot>/.worklog/ampa/.env
+    const envPath = path.join(projectAmpaDir(projectRoot), '.env');
+
     // use -u to force unbuffered stdout/stderr so logs show up promptly
     return {
       cmd: [pythonBin, '-u', '-c', launcher, '--start-scheduler'],
       env,
+      envPaths: [envPath],
     };
   }
   return null;
@@ -587,6 +591,15 @@ async function start(projectRoot, cmd, name = 'default', foreground = false) {
   // known store path. This is best-effort and will create a minimal store
   // if none is available from package resources.
   ensureProjectSchedulerStore(projectRoot);
+
+  // Read the per-project .env file (e.g. <projectRoot>/.worklog/ampa/.env)
+  // and merge its values into the child process environment so the daemon
+  // receives configuration even when the installed Python stub does not
+  // call load_env(). This matches what runOnce() already does for
+  // 'wl ampa run' and 'wl ampa list'.
+  const envPaths = cmd && Array.isArray(cmd.envPaths) ? cmd.envPaths : [];
+  const dotenvEnv = readDotEnv(projectRoot, envPaths);
+
   if (fs.existsSync(ppath)) {
     try {
       const pid = parseInt(fs.readFileSync(ppath, 'utf8'), 10);
@@ -611,7 +624,7 @@ async function start(projectRoot, cmd, name = 'default', foreground = false) {
 
   if (foreground) {
     if (cmd && cmd.cmd && Array.isArray(cmd.cmd)) {
-      const env = Object.assign({}, process.env, cmd.env || {});
+      const env = Object.assign({}, process.env, dotenvEnv, cmd.env || {});
       const proc = spawn(cmd.cmd[0], cmd.cmd.slice(1), { cwd: projectRoot, stdio: 'inherit', env });
       return await new Promise((resolve) => {
         proc.on('exit', (code) => resolve(code || 0));
@@ -628,7 +641,7 @@ async function start(projectRoot, cmd, name = 'default', foreground = false) {
   let proc;
   try {
     if (cmd && cmd.cmd && Array.isArray(cmd.cmd)) {
-      const env = Object.assign({}, process.env, cmd.env || {});
+      const env = Object.assign({}, process.env, dotenvEnv, cmd.env || {});
       proc = spawn(cmd.cmd[0], cmd.cmd.slice(1), { cwd: projectRoot, detached: true, stdio: ['ignore', out, out], env });
     } else {
       proc = spawn(cmd[0], cmd.slice(1), { cwd: projectRoot, detached: true, stdio: ['ignore', out, out] });
