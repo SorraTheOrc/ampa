@@ -83,6 +83,7 @@ from .scheduler_helpers import (  # noqa: E402
     ensure_pr_monitor_command as _ensure_pr_monitor_command,
     ensure_audit_command as _ensure_audit_command,
     ensure_intake_command as _ensure_intake_command,
+    ensure_intake_runner_command as _ensure_intake_runner_command,
     ensure_test_runner_command as _ensure_test_runner_command,
     log_health as _log_health,
 )
@@ -264,6 +265,11 @@ class Scheduler:
         # Auto-register the intake selector command which periodically
         # queries Worklog for idea-stage items and selects a candidate.
         _ensure_intake_command(self.store)
+
+        # Auto-register the intake-runner command which orchestrates the full
+        # intake workflow (query → dispatch → detect → assign). Can be disabled
+        # via metadata.enabled = False.
+        _ensure_intake_runner_command(self.store)
 
         # Auto-register the test-runner command which runs pytest nightly
         # and creates a critical work item on failure.
@@ -928,6 +934,21 @@ class Scheduler:
                 LOG.info("intake result: %s", result)
             except Exception:
                 LOG.exception("intake-selector command failed")
+            return run
+        if spec.command_type == "intake-runner":
+            # Check if disabled via metadata
+            meta = getattr(spec, "metadata", {}) or {}
+            if not meta.get("enabled", True):
+                LOG.info("intake-runner command disabled via metadata")
+                return run
+            try:
+                from .intake_runner import IntakeRunner
+
+                runner = IntakeRunner(run_shell=self.run_shell, command_cwd=self.command_cwd)
+                result = runner.run(spec, self.store)
+                LOG.info("intake-runner result: %s", result)
+            except Exception:
+                LOG.exception("intake-runner command failed")
             return run
         if spec.command_type == "stale-delegation-watchdog":
             try:

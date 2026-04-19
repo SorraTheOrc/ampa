@@ -28,6 +28,7 @@ _AUTO_DELEGATE_COMMAND_ID = "auto-delegate"
 _PR_MONITOR_COMMAND_ID = "pr-monitor"
 _AUDIT_COMMAND_ID = "wl-audit"
 _INTAKE_COMMAND_ID = "intake-selector"
+_INTAKE_RUNNER_COMMAND_ID = "intake-runner"
 _TEST_RUNNER_COMMAND_ID = "test-runner"
 
 
@@ -278,6 +279,51 @@ def ensure_intake_command(store: SchedulerStore) -> None:
         )
     except Exception:
         LOG.exception("Failed to auto-register intake selector command")
+
+
+def ensure_intake_runner_command(store: SchedulerStore) -> None:
+    """Register the intake-runner command if absent.
+
+    The intake-runner orchestrates the full intake workflow: queries for
+    idea-stage items, dispatches /intake sessions, monitors completion,
+    and records metrics. It can be disabled via metadata.enabled = False.
+    Auto-registration is skipped for in-memory/test stores.
+    """
+    try:
+        store_path = getattr(store, "path", None)
+        if store_path == ":memory:":
+            LOG.debug("Skipping intake-runner auto-registration for in-memory store")
+            return
+        existing = store.list_commands()
+        for cmd in existing:
+            if cmd.command_id == _INTAKE_RUNNER_COMMAND_ID:
+                LOG.debug(
+                    "Intake-runner command already registered: %s",
+                    _INTAKE_RUNNER_COMMAND_ID,
+                )
+                return
+        # Default: enabled, 15 minute frequency, medium priority
+        intake_runner_spec = CommandSpec(
+            command_id=_INTAKE_RUNNER_COMMAND_ID,
+            command="echo intake-runner",
+            requires_llm=False,
+            frequency_minutes=15,
+            priority=5,
+            metadata={"enabled": True},
+            title="Intake Runner",
+            max_runtime_minutes=10,
+            command_type="intake-runner",
+            agent=None,
+        )
+        store.add_command(intake_runner_spec)
+        LOG.info(
+            "Auto-registered intake-runner command: %s (every %dm, priority=%d)",
+            _INTAKE_RUNNER_COMMAND_ID,
+            intake_runner_spec.frequency_minutes,
+            intake_runner_spec.priority,
+        )
+    except Exception:
+        LOG.exception("Failed to auto-register intake-runner command")
 
 
 def ensure_test_runner_command(store: SchedulerStore) -> None:
