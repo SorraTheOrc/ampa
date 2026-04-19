@@ -933,6 +933,44 @@ class Scheduler:
                 runner = IntakeRunner(run_shell=self.run_shell, command_cwd=self.command_cwd)
                 result = runner.run(spec, self.store)
                 LOG.info("intake-runner result: %s", result)
+                # Attach a concise execution summary so `wl ampa run intake-runner`
+                # surfaces meaningful information in the command output.
+                if isinstance(run, CommandRunResult):
+                    try:
+                        sel = result.get("selected")
+                        if sel:
+                            selected_line = f"selected={sel}"
+                            dispatch = result.get("dispatch")
+                            if dispatch is not None:
+                                selected_line += f" dispatch_success={str(bool(dispatch)).lower()}"
+                        else:
+                            selected_line = "selected=None"
+                            if "error" in result:
+                                selected_line += f" error={result.get('error')}"
+                            if "skipped" in result:
+                                selected_line += f" skipped={result.get('skipped')}"
+                                if "stage" in result:
+                                    selected_line += f" stage={result.get('stage')}"
+                                if "status" in result:
+                                    selected_line += f" status={result.get('status')}"
+                                if "next_attempt" in result:
+                                    selected_line += f" next_attempt={result.get('next_attempt')}"
+                                if "pid" in result:
+                                    selected_line += f" pid={result.get('pid')}"
+
+                        summary = [selected_line]
+                        if result.get("note"):
+                            summary.append(str(result.get("note")))
+
+                        run = CommandRunResult(
+                            start_ts=run.start_ts,
+                            end_ts=run.end_ts,
+                            exit_code=run.exit_code,
+                            output="\n".join(summary),
+                            metadata={"intake_runner": result},
+                        )
+                    except Exception:
+                        LOG.exception("Failed to build intake-runner summary for output")
             except Exception:
                 LOG.exception("intake-runner command failed")
             return run
