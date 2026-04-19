@@ -65,6 +65,45 @@ class IntakeRunner:
             LOG.warning("Intake runner: selected candidate missing id")
             return {"selected": None}
 
+        # Defensive re-check: query the work item via `wl show` to ensure the
+        # canonical stage/status still indicate an idea-stage candidate. This
+        # prevents selecting items that slipped into non-idea states between
+        # the `wl next` query and dispatch (or when the query wrapper returns
+        # items with explicit stage fields that are not 'idea').
+        try:
+            cmd = f"wl show {wid} --children --json"
+            try:
+                proc = self.run_shell(cmd, shell=True, check=False, capture_output=True, text=True, cwd=self.command_cwd, timeout=30)
+            except TypeError:
+                proc = self.run_shell(cmd, shell=True, check=False, capture_output=True, text=True, cwd=self.command_cwd)
+            if proc is not None and getattr(proc, "returncode", 0) == 0:
+                try:
+                    payload = json.loads(proc.stdout or "null")
+                except Exception:
+                    payload = None
+                wi = None
+                if isinstance(payload, dict):
+                    if isinstance(payload.get("workItem"), dict):
+                        wi = payload.get("workItem")
+                    elif isinstance(payload.get("workItems"), list) and payload.get("workItems"):
+                        wi = payload.get("workItems")[0]
+                    else:
+                        wi = payload
+                if isinstance(wi, dict):
+                    stage_now = wi.get("stage")
+                    status_now = wi.get("status")
+                    # If an explicit stage is present and it is not 'idea', skip.
+                    if stage_now is not None and stage_now != "idea":
+                        LOG.info("Intake runner: candidate %s has stage=%s; skipping selection", wid, stage_now)
+                        return {"selected": None, "skipped": "stage_mismatch", "stage": stage_now}
+                    # If only status is present and indicates closed/completed,
+                    # skip as well (defensive interpretation).
+                    if stage_now is None and status_now is not None and status_now.lower() in ("completed", "done", "closed"):
+                        LOG.info("Intake runner: candidate %s has status=%s; skipping selection", wid, status_now)
+                        return {"selected": None, "skipped": "status_mismatch", "status": status_now}
+        except Exception:
+            LOG.exception("Failed to re-check work item stage for %s", wid)
+
         # Before persisting selection or notifying, consult per-item retry/
         # dispatch state. If the item is currently backoff-scheduled,
         # permanently failed, or already running (live pid), skip selection.

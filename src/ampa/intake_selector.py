@@ -90,7 +90,27 @@ class IntakeCandidateSelector:
             candidate["id"] = str(wid)
             normalized.append(candidate)
 
-        return normalized
+        # Defensive filter: if the candidate includes an explicit stage/status
+        # and it is not "idea", drop it. If no stage/status is present we
+        # preserve the candidate to retain compatibility with older/wrapper
+        # shapes that may omit explicit stage fields.
+        filtered: List[Dict[str, Any]] = []
+        for c in normalized:
+            st = c.get("stage") or c.get("status")
+            if st is None:
+                filtered.append(c)
+            else:
+                try:
+                    if str(st) == "idea":
+                        filtered.append(c)
+                    else:
+                        LOG.info("Intake selector: dropping candidate %s with stage=%s", c.get("id"), st)
+                except Exception:
+                    # Be conservative: keep the candidate if any unexpected error
+                    # occurs while evaluating the stage field.
+                    filtered.append(c)
+
+        return filtered
 
     def _item_sort_key(self, item: Dict[str, Any]):
         """Return a tuple sort key: (-sortIndex, -updated_ts, id) for descending priority.
