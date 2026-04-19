@@ -1,11 +1,10 @@
 """Intake runner to query and select idea-stage work items.
 
-This module provides a small runner used by the Scheduler when a command
-with command_type=="intake" (or id == "intake-selector") is executed.
-It delegates to IntakeCandidateSelector to query `wl list --stage idea` and
-select a single top candidate. When a candidate is chosen it records a
-per-item `last_selected_at_by_item` timestamp in the scheduler store so
-that subsequent cycles can observe recent selections.
+This module provides a runner used by the Scheduler when a command
+with command_id=="intake-runner" (or command_type=="intake-runner") is executed.
+It delegates to IntakeCandidateSelector to query `wl next --stage idea` and
+select a single top candidate. When a candidate is chosen it dispatches an
+/intake session, monitors completion, and records metrics.
 """
 
 from __future__ import annotations

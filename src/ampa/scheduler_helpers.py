@@ -27,7 +27,6 @@ _WATCHDOG_COMMAND_ID = "stale-delegation-watchdog"
 _AUTO_DELEGATE_COMMAND_ID = "auto-delegate"
 _PR_MONITOR_COMMAND_ID = "pr-monitor"
 _AUDIT_COMMAND_ID = "wl-audit"
-_INTAKE_COMMAND_ID = "intake-selector"
 _INTAKE_RUNNER_COMMAND_ID = "intake-runner"
 _TEST_RUNNER_COMMAND_ID = "test-runner"
 
@@ -239,46 +238,6 @@ def ensure_audit_command(store: SchedulerStore) -> None:
         )
     except Exception:
         LOG.exception("Failed to auto-register audit command")
-
-
-def ensure_intake_command(store: SchedulerStore) -> None:
-    """Register the intake selector command if absent.
-
-    The command periodically queries Worklog for "idea" stage items and
-    selects the highest-priority candidate for intake processing. Auto-
-    registration is skipped for in-memory/test stores to avoid surprising
-    side-effects during unit tests.
-    """
-    try:
-        store_path = getattr(store, "path", None)
-        if store_path == ":memory:":
-            LOG.debug("Skipping intake auto-registration for in-memory store")
-            return
-        existing = store.list_commands()
-        for cmd in existing:
-            if cmd.command_id == _INTAKE_COMMAND_ID:
-                LOG.debug("Intake command already registered: %s", _INTAKE_COMMAND_ID)
-                return
-        intake_spec = CommandSpec(
-            command_id=_INTAKE_COMMAND_ID,
-            command="true",
-            requires_llm=False,
-            frequency_minutes=5,
-            priority=0,
-            metadata={"discord_label": "intake selector"},
-            title="Intake Candidate Selector",
-            max_runtime_minutes=5,
-            command_type="intake",
-            agent=None,
-        )
-        store.add_command(intake_spec)
-        LOG.info(
-            "Auto-registered intake selector command: %s (every %dm)",
-            _INTAKE_COMMAND_ID,
-            intake_spec.frequency_minutes,
-        )
-    except Exception:
-        LOG.exception("Failed to auto-register intake selector command")
 
 
 def ensure_intake_runner_command(store: SchedulerStore) -> None:

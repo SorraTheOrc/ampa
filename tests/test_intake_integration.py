@@ -3,7 +3,7 @@ import datetime as dt
 
 from ampa.intake_runner import IntakeRunner
 from ampa.scheduler_store import SchedulerStore
-from ampa.scheduler_helpers import ensure_intake_command
+from ampa.scheduler_helpers import ensure_intake_runner_command
 
 
 class DummyStore(SchedulerStore):
@@ -18,7 +18,7 @@ class DummyStore(SchedulerStore):
 def test_ensure_intake_skips_in_memory():
     store = DummyStore()
     # should not raise and should not add command
-    ensure_intake_command(store)
+    ensure_intake_runner_command(store)
     assert store.list_commands() == []
 
 

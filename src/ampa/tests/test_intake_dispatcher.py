@@ -90,7 +90,7 @@ def test_integration_intake_runner_dispatch(monkeypatch):
             self._state[cid] = state
 
     store = DummyStore()
-    res = runner.run(type("S", (), {"command_id": "intake-selector"})(), store)
+    res = runner.run(type("S", (), {"command_id": "intake-runner"})(), store)
     assert res["selected"] == "WL-TEST-1"
     assert res["dispatch"] is True
 

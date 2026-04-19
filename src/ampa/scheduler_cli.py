@@ -136,6 +136,8 @@ def _build_command_listing(
         next_run: Optional[dt.datetime] = None
         if last_run is not None and spec.frequency_minutes > 0:
             next_run = last_run + dt.timedelta(minutes=spec.frequency_minutes)
+        # Commands are enabled by default unless explicitly set to False in metadata
+        enabled = spec.metadata.get("enabled", True)
         rows.append(
             {
                 "id": spec.command_id,
@@ -144,6 +146,7 @@ def _build_command_listing(
                 "agent": spec.agent,
                 "last_run": _to_iso(last_run),
                 "next_run": _to_iso(next_run),
+                "enabled": enabled,
                 # Expose running state for callers that want to partition
                 # active (running) vs inactive commands.
                 "running": bool(state.get("running", False)),
@@ -169,15 +172,19 @@ def _format_command_table(rows: List[Dict[str, Any]]) -> str:
     formatted: List[List[str]] = []
     for row in rows:
         last_run = row.get("last_run") or "never"
-        next_run = row.get("next_run") or "n/a"
+        # If command is disabled, show "Disabled" instead of next_run
+        if not row.get("enabled", True):
+            next_run = "Disabled"
+        else:
+            next_run = row.get("next_run") or "n/a"
+            if next_run not in ("n/a", None):
+                parsed = _from_iso(str(next_run))
+                if parsed is not None:
+                    next_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M")
         if last_run not in ("never", None):
             parsed = _from_iso(str(last_run))
             if parsed is not None:
                 last_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M")
-        if next_run not in ("n/a", None):
-            parsed = _from_iso(str(next_run))
-            if parsed is not None:
-                next_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M")
         formatted.append(
             [
                 str(row.get("id") or ""),
@@ -210,15 +217,19 @@ def _format_inactive_command_table(rows: List[Dict[str, Any]]) -> str:
     formatted: List[List[str]] = []
     for row in rows:
         last_run = row.get("last_run") or "never"
-        next_run = row.get("next_run") or "n/a"
+        # If command is disabled, show "Disabled" instead of next_run
+        if not row.get("enabled", True):
+            next_run = "Disabled"
+        else:
+            next_run = row.get("next_run") or "n/a"
+            if next_run not in ("n/a", None):
+                parsed = _from_iso(str(next_run))
+                if parsed is not None:
+                    next_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M")
         if last_run not in ("never", None):
             parsed = _from_iso(str(last_run))
             if parsed is not None:
                 last_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M")
-        if next_run not in ("n/a", None):
-            parsed = _from_iso(str(next_run))
-            if parsed is not None:
-                next_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M")
         formatted.append([
             str(row.get("id") or ""),
             str(row.get("name") or ""),
@@ -493,6 +504,8 @@ def _format_command_detail(
     next_run: Optional[dt.datetime] = None
     if last_run is not None and spec.frequency_minutes > 0:
         next_run = last_run + dt.timedelta(minutes=spec.frequency_minutes)
+    # Commands are enabled by default unless explicitly set to False in metadata
+    enabled = spec.metadata.get("enabled", True)
     return {
         "id": spec.command_id,
         "name": spec.title or spec.command_id,
@@ -502,6 +515,7 @@ def _format_command_detail(
         "frequency_minutes": spec.frequency_minutes,
         "priority": spec.priority,
         "requires_llm": spec.requires_llm,
+        "enabled": enabled,
         "running": running,
         "last_run": _to_iso(last_run),
         "last_exit_code": last_exit,
@@ -548,12 +562,17 @@ def _format_command_details_table(details: List[Dict[str, Any]], fmt: str) -> st
             if parsed is not None:
                 last_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M:%S")
         lines.append(f"  Last run:    {last_run}")
-        next_run = d.get("next_run") or "n/a"
-        if next_run not in ("n/a", None):
-            parsed = _from_iso(str(next_run))
-            if parsed is not None:
-                next_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M:%S")
+        # If command is disabled, show "Disabled" instead of next_run
+        if not d.get("enabled", True):
+            next_run = "Disabled"
+        else:
+            next_run = d.get("next_run") or "n/a"
+            if next_run not in ("n/a", None):
+                parsed = _from_iso(str(next_run))
+                if parsed is not None:
+                    next_run = parsed.astimezone().strftime("%d-%b-%Y %H:%M:%S")
         lines.append(f"  Next run:    {next_run}")
+        lines.append(f"  Enabled:     {d.get('enabled', True)}")
         if fmt == "full":
             lines.append(f"  Type:        {d.get('type', 'shell')}")
             lines.append(f"  Agent:       {d.get('agent') or '(default)'}")
