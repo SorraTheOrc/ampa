@@ -67,6 +67,25 @@ ampa_last_heartbeat_timestamp_seconds = Gauge(
     registry=registry,
 )
 
+# Intake metrics: aggregated counters/gauges for automated intake observability
+ampa_intake_items_processed_total = Counter(
+    "ampa_intake_items_processed_total",
+    "Total number of intake items processed",
+    registry=registry,
+)
+ampa_intake_success_rate = Gauge(
+    "ampa_intake_success_rate",
+    "Fraction of successful intake runs (0.0-1.0)",
+    registry=registry,
+)
+ampa_intake_avg_completion_seconds = Gauge(
+    "ampa_intake_avg_completion_seconds",
+    "Average intake completion time in seconds",
+    registry=registry,
+)
+# Internal tracking for incremental counter updates
+_last_intake_processed_total = 0
+
 
 def _tool_output_dir() -> str:
     path = os.getenv("AMPA_TOOL_OUTPUT_DIR")
@@ -131,6 +150,35 @@ def _wsgi_app(environ, start_response):
         data = generate_latest(registry)
         start_response("200 OK", [("Content-Type", CONTENT_TYPE_LATEST)])
         return [data]
+
+    if path == "/metrics/intake":
+        # Return per-item intake stats from scheduler store.
+        if _scheduler is None:
+            return _json_response(
+                start_response,
+                "503 Service Unavailable",
+                {"error": "scheduler not running"},
+            )
+        try:
+            # Aggregate intake_stats from all registered commands.
+            all_stats = {}
+            commands = _scheduler.store.list_commands()
+            for spec in commands:
+                try:
+                    state = _scheduler.store.get_state(spec.command_id)
+                    if state and "intake_stats" in state:
+                        all_stats[spec.command_id] = state["intake_stats"]
+                except Exception:
+                    # Skip commands with errors.
+                    pass
+            return _json_response(start_response, "200 OK", {"intake_stats": all_stats})
+        except Exception as exc:
+            _LOG.exception("Error fetching intake stats")
+            return _json_response(
+                start_response,
+                "500 Internal Server Error",
+                {"error": str(exc)},
+            )
 
     if path == "/health":
         # Fatal misconfiguration = missing AMPA_DISCORD_BOT_TOKEN

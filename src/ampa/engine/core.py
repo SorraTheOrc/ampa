@@ -518,6 +518,11 @@ class Engine:
             to_state.status,
             to_state.stage,
         )
+        try:
+            if assignee:
+                LOG.info("Step 3: Assigned %s to %s during delegation", work_item_id, assignee)
+        except Exception:
+            LOG.exception("Failed to log assignee information for %s", work_item_id)
 
         # --- Step 4: Execute command logic ---
         # Resolve the matching from-state alias so we can look up the

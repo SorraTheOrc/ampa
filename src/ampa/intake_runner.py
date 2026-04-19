@@ -22,6 +22,7 @@ import datetime as dt
 import json
 from datetime import timezone
 import logging as _logging
+from . import server as _server
 
 LOG = logging.getLogger("ampa.intake_runner")
 
@@ -53,6 +54,7 @@ class IntakeRunner:
         if not candidates:
             LOG.info("Intake runner: no idea-stage candidates")
             return {"selected": None}
+        LOG.info("Intake runner (query phase): wl list returned %d candidate(s)", len(candidates))
 
         selected = selector.select_top(candidates)
         if selected is None:
@@ -146,6 +148,7 @@ class IntakeRunner:
 
         # Decide whether to dispatch: avoid starting a second intake process
         # for the same work item if one is already recorded as in-progress.
+        LOG.info("Intake runner (dispatch phase): deciding whether to dispatch %s", wid)
         try:
             state = store.get_state(spec.command_id) or {}
             dispatches = state.setdefault("intake_dispatches", {})
@@ -330,6 +333,7 @@ class IntakeRunner:
                 store.update_state(spec.command_id, state)
             except Exception:
                 LOG.exception("Failed to persist intake dispatch state for %s", wid)
+        LOG.info("Intake runner (dispatch phase): dispatch result for %s = %s", wid, getattr(dispatch_result, 'success', None))
 
         # Add a Worklog comment summarising the dispatch result so operators
         # can see whether the intake session was started and any error.
@@ -463,6 +467,22 @@ class IntakeRunner:
                         "outcome": outcome,
                         "duration_seconds": dur,
                     }
+
+                    # Update aggregated per-item stats (processed, successes, failures, avg duration)
+                    stats = state.setdefault("intake_stats", {})
+                    st = stats.setdefault(wid, {"processed": 0, "successes": 0, "failures": 0, "total_duration_seconds": 0, "avg_duration_seconds": None})
+                    try:
+                        st["processed"] = int(st.get("processed", 0)) + 1
+                        if outcome == "intake_complete":
+                            st["successes"] = int(st.get("successes", 0)) + 1
+                        else:
+                            st["failures"] = int(st.get("failures", 0)) + 1
+                        if dur is not None:
+                            st["total_duration_seconds"] = int(st.get("total_duration_seconds", 0)) + int(dur)
+                            st["avg_duration_seconds"] = int(st["total_duration_seconds"] / st["processed"]) if st["processed"] > 0 else None
+                    except Exception:
+                        LOG.exception("Failed to update intake_stats for %s", wid)
+
                     # Annotate dispatch entry so we don't re-process it.
                     entry["observed"] = True
                     entry.setdefault("outcome", outcome)
@@ -472,11 +492,66 @@ class IntakeRunner:
                     # in-progress intake run (which would cause skipping).
                     entry.pop("pid", None)
 
+                    # Log detect/assign phase details
+                    try:
+                        assignee = None
+                        if isinstance(wi, dict):
+                            assignee = wi.get("assignee")
+                        LOG.info("Intake runner (detect phase): outcome=%s for %s (assignee=%s, duration=%s)", outcome, wid, assignee, dur)
+                    except Exception:
+                        LOG.exception("Failed to log detect/assign info for %s", wid)
+
                     # Persist state after each processed entry for durability.
                     try:
                         state["intake_metrics"] = metrics
                         state["intake_dispatches"] = dispatches
+                        state["intake_stats"] = stats
                         store.update_state(spec.command_id, state)
+                        # Update Prometheus metrics exposed by server module
+                        try:
+                            # Aggregate across per-item stats
+                            total_processed = 0
+                            total_successes = 0
+                            total_duration = 0
+                            for s in stats.values():
+                                try:
+                                    total_processed += int(s.get("processed", 0))
+                                except Exception:
+                                    pass
+                                try:
+                                    total_successes += int(s.get("successes", 0))
+                                except Exception:
+                                    pass
+                                try:
+                                    total_duration += int(s.get("total_duration_seconds", 0))
+                                except Exception:
+                                    pass
+
+                            if total_processed > 0:
+                                success_rate = float(total_successes) / float(total_processed)
+                                avg_completion = float(total_duration) / float(total_processed) if total_duration is not None else 0.0
+                            else:
+                                success_rate = 0.0
+                                avg_completion = 0.0
+
+                            # Increment the counter by the delta since last update (server tracks last value)
+                            try:
+                                delta = total_processed - getattr(_server, "_last_intake_processed_total", 0)
+                                if delta > 0:
+                                    _server.ampa_intake_items_processed_total.inc(delta)
+                                # store last value for next delta computation
+                                _server._last_intake_processed_total = total_processed
+                            except Exception:
+                                # Best-effort: if counter manipulation fails, ignore
+                                pass
+
+                            try:
+                                _server.ampa_intake_success_rate.set(success_rate)
+                                _server.ampa_intake_avg_completion_seconds.set(avg_completion)
+                            except Exception:
+                                LOG.exception("Failed to set Prometheus intake gauges")
+                        except Exception:
+                            LOG.exception("Failed to update Prometheus intake metrics")
                     except Exception:
                         LOG.exception("Failed to persist intake dispatch outcome for %s", wid)
             except Exception:

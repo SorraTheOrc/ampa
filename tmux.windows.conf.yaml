@@ -3,7 +3,7 @@ windows:
   - name: "AMPA"
     cwd: "~/projects/ampa"
     panes:
-      - cmd: "opencode -c"
+      - cmd: "pi --continue"
       - cmd: "wl tui"
         split:
           dir: vertical
