@@ -1,20 +1,350 @@
-// This file is a copy of docs/workflow/workflow-schema.json from the repo.
-// It is placed into the installer resources so the packaged workflow.json can
-// validate against the schema when the installed daemon starts inside the
-// project's config location.
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://anomaly.co/schemas/workflow/v1.0.0/workflow-schema.json",
   "title": "Workflow Descriptor",
-  "description": "Minimal placeholder schema copied into installer resources.",
+  "description": "Machine-readable schema for stateful work-item workflows. Defines valid state transitions, commands, invariants, and roles for the AMPA engine and human collaborators. See workflow-language.md for the specification.",
   "type": "object",
+  "required": ["version", "metadata", "status", "stage", "invariants", "commands"],
+  "additionalProperties": false,
   "properties": {
-    "version": { "type": "string" },
-    "metadata": { "type": "object" },
-    "status": { "type": "array" },
-    "stage": { "type": "array" },
-    "invariants": { "type": "object" },
-    "commands": { "type": "array" }
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version of the workflow spec (e.g., '1.0.0')."
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "status": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Ordered list of allowed coarse lifecycle statuses (e.g., open, in_progress, blocked, closed)."
+    },
+    "stage": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Ordered list of allowed finer-grained phases (e.g., idea, intake_complete, plan_complete, in_progress, in_review, done)."
+    },
+    "states": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/StateTuple"
+      },
+      "description": "Map of friendly alias names to {status, stage} tuples. Aliases can be used in command from/to fields."
+    },
+    "terminal_states": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true,
+      "description": "List of state aliases (or inline tuples) that are terminal — dead-end states that require no outbound transitions. Used by validation to suppress dead-end warnings."
+    },
+    "invariants": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Invariant"
+      },
+      "description": "List of named invariant definitions that commands reference in pre/post fields."
+    },
+    "commands": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/Command"
+      },
+      "minProperties": 1,
+      "description": "Map of command definitions keyed by command name. Command names should be imperative verbs (e.g., intake, plan, delegate)."
+    }
+    ,
+    "assignment_map": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default_assignee": { "type": "string" },
+        "mappings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["states", "stage", "assignee"],
+            "additionalProperties": false,
+            "properties": {
+              "states": { "type": "array", "items": { "type": "string" } },
+              "stage": { "type": "string" },
+              "assignee": { "type": "string" }
+            }
+          }
+        }
+      },
+      "description": "Optional deterministic mapping from (state, stage) to assignee used by the scheduler."
+    }
   },
-  "required": ["version"]
+  "$defs": {
+    "Metadata": {
+      "type": "object",
+      "required": ["name", "description", "owner", "roles"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Short identifier for this workflow."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the workflow's purpose."
+        },
+        "owner": {
+          "type": "string",
+          "description": "Team or individual responsible for maintaining this workflow definition."
+        },
+        "links": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "format": "uri" },
+          "description": "Optional map of related links (e.g., documentation, source repos)."
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Role"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "List of role definitions used by commands. The executor maps roles to concrete humans or agents."
+        }
+      }
+    },
+    "Role": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Simple role identifier (e.g., 'Producer')."
+        },
+        {
+          "type": "object",
+          "required": ["name"],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Role identifier referenced by commands."
+            },
+            "description": {
+              "type": "string",
+              "description": "Human-readable description of the role's responsibilities."
+            },
+            "type": {
+              "type": "string",
+              "enum": ["human", "agent", "either"],
+              "description": "Whether this role is typically filled by a human, an AI agent, or either."
+            }
+          }
+        }
+      ]
+    },
+    "StateTuple": {
+      "type": "object",
+      "required": ["status", "stage"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "Must reference a value declared in the top-level status array."
+        },
+        "stage": {
+          "type": "string",
+          "description": "Must reference a value declared in the top-level stage array."
+        }
+      }
+    },
+    "StateRef": {
+      "description": "A reference to a state: either a string alias (referencing the states map) or an inline {status, stage} tuple.",
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Alias name defined in the top-level states map."
+        },
+        {
+          "$ref": "#/$defs/StateTuple"
+        }
+      ]
+    },
+    "Invariant": {
+      "type": "object",
+      "required": ["name", "description", "when"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique identifier for this invariant, referenced by command pre/post lists."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of what this invariant checks."
+        },
+        "when": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": ["pre", "post", "both"]
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["pre", "post"]
+              },
+              "minItems": 1,
+              "maxItems": 2,
+              "uniqueItems": true
+            }
+          ],
+          "description": "When this invariant is evaluated: 'pre' (before command), 'post' (after command), 'both', or an array ['pre', 'post']."
+        },
+        "logic": {
+          "type": "string",
+          "description": "Machine-checkable rule expression. Keep declarative. Exact expression language is implementation-specific but must be documented alongside the workflow."
+        }
+      }
+    },
+    "InputField": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "number", "boolean", "array", "object"],
+          "description": "Data type of the input field."
+        },
+        "required": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether this input is required for the command to execute."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the input."
+        },
+        "enum": {
+          "type": "array",
+          "items": {},
+          "description": "Optional list of allowed values."
+        },
+        "default": {
+          "description": "Optional default value if the input is not provided."
+        }
+      }
+    },
+    "Effects": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "add_tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags to add to the work item after the command succeeds."
+        },
+        "remove_tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tags to remove from the work item after the command succeeds."
+        },
+        "set_assignee": {
+          "type": "string",
+          "description": "Assign the work item to this role or agent after the command succeeds."
+        },
+        "set_needs_producer_review": {
+          "type": "boolean",
+          "description": "Set the needs-producer-review flag on the work item."
+        },
+        "notifications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["channel"],
+            "properties": {
+              "channel": {
+                "type": "string",
+                "description": "Notification channel (e.g., 'discord', 'email', 'webhook')."
+              },
+              "message": {
+                "type": "string",
+                "description": "Optional message template."
+              }
+            }
+          },
+          "description": "Notifications to emit after the command succeeds."
+        },
+        "audit": {
+          "type": "object",
+          "properties": {
+            "record_prompt_hash": { "type": "boolean" },
+            "record_model": { "type": "boolean" },
+            "record_response_ids": { "type": "boolean" },
+            "record_agent_id": { "type": "boolean" }
+          },
+          "description": "Audit details to record for AI-driven commands."
+        }
+      },
+      "description": "Optional side effects to assert/emit after successful command execution."
+    },
+    "Command": {
+      "type": "object",
+      "required": ["description", "from", "to", "actor"],
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Short human-readable summary of what the command does."
+        },
+        "from": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StateRef"
+          },
+          "minItems": 1,
+          "description": "List of allowed source state tuples. Each entry is a state alias or an inline {status, stage} tuple."
+        },
+        "to": {
+          "$ref": "#/$defs/StateRef",
+          "description": "Target state tuple applied when the command succeeds. Must be a single alias or {status, stage} tuple."
+        },
+        "actor": {
+          "type": "string",
+          "description": "Role that executes this command. Must reference a role declared in metadata.roles."
+        },
+        "pre": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of invariant names that must pass before the command may run."
+        },
+        "post": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of invariant names that must pass after the transition is applied."
+        },
+        "inputs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/InputField"
+          },
+          "description": "Schema-like object describing required/optional arguments for this command."
+        },
+        "prompt_ref": {
+          "type": "string",
+          "description": "Optional path to a versioned prompt template (e.g., 'prompts/delegate.md'). Template variables must correspond to inputs."
+        },
+        "effects": {
+          "$ref": "#/$defs/Effects",
+          "description": "Optional additional side effects (tags, notifications, audit records)."
+        },
+        "dispatch_map": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Maps each from-state alias to a shell command template. Templates may use {id} for work item ID substitution."
+        }
+      }
+    }
+  }
 }
