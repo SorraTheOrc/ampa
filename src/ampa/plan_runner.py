@@ -18,6 +18,7 @@ from typing import Any
 
 from .intake_selector import IntakeCandidateSelector  # reuse helper shape
 from .engine.dispatch import OpenCodeRunDispatcher, DispatchResult
+from . import notifications
 
 LOG = logging.getLogger("ampa.plan_runner")
 
@@ -158,6 +159,18 @@ class PlanRunner:
 
         LOG.info("Plan runner: selected candidate %s — %s", wid, selected.get("title") or selected.get("name") or "(no title)")
 
+        # Integration: notify operators of plan candidate selection
+        try:
+            title_text = selected.get("title") or selected.get("name") or "(no title)"
+            notif_title = "Automated Plan Selected"
+            notif_body = f"{title_text} ({wid}) has been selected for automated planning."
+            try:
+                notifications.notify(notif_title, notif_body, message_type="plan")
+            except Exception:
+                LOG.exception("Failed to send plan notification for %s", wid)
+        except Exception:
+            LOG.exception("Failed to build/send plan notification for %s", wid)
+
         # Read state
         try:
             state = store.get_state(spec.command_id) or {}
@@ -265,6 +278,14 @@ class PlanRunner:
                         if attempts >= max_retries:
                             retries[wid] = {"attempts": attempts, "permanent_failure": True, "next_attempt": None}
                             permanent = True
+                            try:
+                                notifications.notify(
+                                    f"Plan dispatch permanent failure — {wid}",
+                                    f"Automated plan dispatch for {wid} failed after {attempts} attempt(s).",
+                                    message_type="error",
+                                )
+                            except Exception:
+                                LOG.exception("Failed to send permanent failure notification for %s", wid)
                         else:
                             delay_minutes = backoff_base_minutes * (2 ** (attempts - 1))
                             next_dt = dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=delay_minutes)
@@ -277,6 +298,14 @@ class PlanRunner:
                             attempts = attempts + 1
                             if attempts >= max_retries:
                                 retries[wid] = {"attempts": attempts, "permanent_failure": True, "next_attempt": None}
+                                try:
+                                    notifications.notify(
+                                        f"Plan dispatch permanent failure — {wid}",
+                                        f"Automated plan dispatch for {wid} failed after {attempts} attempt(s). Error: {dispatch_result.error}",
+                                        message_type="error",
+                                    )
+                                except Exception:
+                                    LOG.exception("Failed to send permanent failure notification for %s", wid)
                             else:
                                 delay_minutes = backoff_base_minutes * (2 ** (attempts - 1))
                                 next_dt = dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=delay_minutes)
@@ -304,8 +333,6 @@ class PlanRunner:
                 else:
                     comment_text = f"Automated plan dispatch failed: {dispatch_result.error or 'unknown error'}."
 
-            cmd = f'wI comment add {wid} --comment "{comment_text}" --author "ampa" --json'
-            # Note: use the wl CLI; earlier modules use `wl comment add` — keep consistency
             cmd = f"wl comment add {wid} --comment \"{comment_text}\" --author \"ampa\" --json"
             try:
                 self.run_shell(cmd, shell=True, check=False, capture_output=True, text=True, cwd=self.command_cwd, timeout=60)
