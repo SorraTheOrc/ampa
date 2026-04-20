@@ -307,6 +307,55 @@ Candidate selection
 The candidate selection service calls `wl next --json` and returns the top
 candidate from that response.
 
+Automated Plan Runner
+----------------------
+
+The plan-runner is an automated scheduled task that progresses work items from
+`intake_complete` stage to `plan_complete` by dispatching opencode `/plan` sessions.
+
+**How it works:**
+
+1. Queries `wl next --stage intake_complete` for candidates
+2. Selects the top candidate using deterministic selection semantics
+3. Dispatches an opencode `/plan {id}` session via the dispatch system
+4. Monitors completion and records metrics
+5. Handles retries with exponential backoff on failure
+
+**Configuration:**
+
+The plan-runner is auto-registered with the scheduler with default settings:
+- `command_id`: "plan-runner"
+- `frequency_minutes`: 15 (runs every 15 minutes)
+- `priority`: 5
+- `metadata.enabled`: true (can be disabled by setting to false)
+
+**Retry/Backoff Configuration:**
+
+Configure via spec metadata:
+- `max_retries`: Maximum retry attempts (default: 3)
+- `backoff_base_minutes`: Base delay for exponential backoff (default: 15)
+
+**State Namespaces:**
+
+The plan-runner maintains separate scheduler state namespaces:
+- `plan_dispatches`: Active/pending dispatch records
+- `plan_retries`: Retry/backoff state per work item
+- `plan_metrics`: Historical dispatch outcomes and metrics
+
+**Prometheus Metrics:**
+
+Exposed metrics:
+- `ampa_plan_dispatched_total`: Counter for total dispatches
+- `ampa_plan_success_rate`: Gauge for success rate (0.0-1.0)
+- `ampa_plan_avg_completion_seconds`: Gauge for average completion time
+
+**Discord Notifications:**
+
+Sent on:
+- Plan candidate selection
+- Permanent failure (after max_retries exhausted)
+- Dispatch errors
+
 Conversation manager
 --------------------
 
