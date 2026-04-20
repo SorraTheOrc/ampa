@@ -84,6 +84,7 @@ from .scheduler_helpers import (  # noqa: E402
     ensure_audit_command as _ensure_audit_command,
     ensure_intake_runner_command as _ensure_intake_runner_command,
     ensure_test_runner_command as _ensure_test_runner_command,
+    ensure_plan_runner_command as _ensure_plan_runner_command,
     log_health as _log_health,
 )
 
@@ -270,6 +271,12 @@ class Scheduler:
         # Auto-register the test-runner command which runs pytest nightly
         # and creates a critical work item on failure.
         _ensure_test_runner_command(self.store)
+
+        # Auto-register the plan-runner command which orchestrates the
+        # planning workflow: queries intake_complete-stage items, dispatches
+        # /plan sessions, monitors completion, and records metrics. Can be disabled
+        # via metadata.enabled = False.
+        _ensure_plan_runner_command(self.store)
 
         # --- Discord bot process supervision ---
         self._bot_supervisor = BotSupervisor(
@@ -973,6 +980,49 @@ class Scheduler:
                         LOG.exception("Failed to build intake-runner summary for output")
             except Exception:
                 LOG.exception("intake-runner command failed")
+            return run
+        if spec.command_id == "plan-runner" or spec.command_type == "plan-runner":
+            # Check if disabled via metadata
+            meta = getattr(spec, "metadata", {}) or {}
+            if not meta.get("enabled", True):
+                LOG.info("plan-runner command disabled via metadata")
+                return run
+            try:
+                from .plan_runner import PlanRunner
+
+                runner = PlanRunner(run_shell=self.run_shell, command_cwd=self.command_cwd)
+                result = runner.run(spec, self.store)
+                LOG.info("plan-runner result: %s", result)
+                # Attach a concise execution summary so `wl ampa run plan-runner`
+                # surfaces meaningful information in the command output.
+                if isinstance(run, CommandRunResult):
+                    try:
+                        planned = result.get("planned")
+                        if planned:
+                            planned_line = f"planned={planned}"
+                            dispatch = result.get("dispatch")
+                            if dispatch is not None:
+                                planned_line += f" dispatch_success={str(bool(dispatch)).lower()}"
+                        else:
+                            planned_line = "planned=None"
+                            if "error" in result:
+                                planned_line += f" error={result.get('error')}"
+
+                        summary = [planned_line]
+                        if result.get("note"):
+                            summary.append(str(result.get("note")))
+
+                        run = CommandRunResult(
+                            start_ts=run.start_ts,
+                            end_ts=run.end_ts,
+                            exit_code=run.exit_code,
+                            output="\n".join(summary),
+                            metadata={"plan_runner": result},
+                        )
+                    except Exception:
+                        LOG.exception("Failed to build plan-runner summary for output")
+            except Exception:
+                LOG.exception("plan-runner command failed")
             return run
         if spec.command_type == "stale-delegation-watchdog":
             try:

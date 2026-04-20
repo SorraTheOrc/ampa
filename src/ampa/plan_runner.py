@@ -131,6 +131,12 @@ class PlanRunner:
 
         Returns a small dict describing outcome: {"planned": id or None}.
         """
+        # First, check previous dispatches for completion / timeout
+        try:
+            self._process_previous_dispatches(spec, store)
+        except Exception:
+            LOG.exception("Failed while processing previous plan dispatch outcomes")
+
         selector = PlanCandidateSelector(run_shell=self.run_shell, cwd=self.command_cwd)
         candidates = selector.query_candidates()
         if candidates is None:

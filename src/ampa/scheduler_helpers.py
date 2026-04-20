@@ -29,6 +29,7 @@ _PR_MONITOR_COMMAND_ID = "pr-monitor"
 _AUDIT_COMMAND_ID = "wl-audit"
 _INTAKE_RUNNER_COMMAND_ID = "intake-runner"
 _TEST_RUNNER_COMMAND_ID = "test-runner"
+_PLAN_RUNNER_COMMAND_ID = "plan-runner"
 
 
 # ---------------------------------------------------------------------------
@@ -340,6 +341,51 @@ def ensure_test_runner_command(store: SchedulerStore) -> None:
         )
     except Exception:
         LOG.exception("Failed to auto-register test-runner command")
+
+
+def ensure_plan_runner_command(store: SchedulerStore) -> None:
+    """Register the plan-runner command if absent.
+
+    The plan-runner orchestrates the full planning workflow: queries for
+    intake_complete-stage items, dispatches /plan sessions, monitors completion,
+    and records metrics. It can be disabled via metadata.enabled = False.
+    Auto-registration is skipped for in-memory/test stores.
+    """
+    try:
+        store_path = getattr(store, "path", None)
+        if store_path == ":memory:":
+            LOG.debug("Skipping plan-runner auto-registration for in-memory store")
+            return
+        existing = store.list_commands()
+        for cmd in existing:
+            if cmd.command_id == _PLAN_RUNNER_COMMAND_ID:
+                LOG.debug(
+                    "Plan-runner command already registered: %s",
+                    _PLAN_RUNNER_COMMAND_ID,
+                )
+                return
+        # Default: enabled, 15 minute frequency, medium priority
+        plan_runner_spec = CommandSpec(
+            command_id=_PLAN_RUNNER_COMMAND_ID,
+            command="echo plan-runner",
+            requires_llm=False,
+            frequency_minutes=15,
+            priority=5,
+            metadata={"enabled": True},
+            title="Plan Runner",
+            max_runtime_minutes=10,
+            command_type="plan-runner",
+            agent=None,
+        )
+        store.add_command(plan_runner_spec)
+        LOG.info(
+            "Auto-registered plan-runner command: %s (every %dm, priority=%d)",
+            _PLAN_RUNNER_COMMAND_ID,
+            plan_runner_spec.frequency_minutes,
+            plan_runner_spec.priority,
+        )
+    except Exception:
+        LOG.exception("Failed to auto-register plan-runner command")
 
 
 # send_test_button_message removed — test-button feature removed.
