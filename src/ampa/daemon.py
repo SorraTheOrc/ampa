@@ -78,45 +78,118 @@ def load_env() -> None:
 
     # 1a. User-level XDG config .env (e.g. $XDG_CONFIG_HOME/opencode/.worklog/ampa/.env
     # or ~/.config/opencode/.worklog/ampa/.env).  This lets operators place
-    # per-user overrides in their XDG config directory which is useful for
-    # developer-specific settings (test channels, tokens) without committing
-    # them into the project.  Keep this after the project-local lookup so a
-    # repository-specific .env continues to take precedence.
+    # their token in a shared location instead of duplicating it per-project.
+    xdg_env = os.path.expanduser("~/.config/opencode/.worklog/ampa/.env")
+    LOG.info("Checking for XDG .env at %s", xdg_env)
+    if os.path.isfile(xdg_env):
+        load_dotenv(xdg_env, override=True)
+        LOG.info("Loaded environment overrides from XDG .env")
+        return
+
+    # 2. Package .env (<packageDir>/.env)
+    package_env = os.path.join(os.path.dirname(__file__), os.pardir, ".env")
+    LOG.info("Checking for package .env at %s", package_env)
+    if os.path.isfile(package_env):
+        load_dotenv(package_env, override=True)
+        LOG.info("Loaded environment overrides from package .env")
+        return
+
+    # 3. Legacy root .env (<repoRoot>/.env)
+    legacy_env = os.path.join(os.getcwd(), ".env")
+    LOG.info("Checking for legacy root .env at %s", legacy_env)
+    if os.path.isfile(legacy_env):
+        load_dotenv(legacy_env, override=True)
+        LOG.info("Loaded environment overrides from legacy root .env")
+
+
+def _check_required_files(interactive: bool = True) -> bool:
+    """Check for required AMPA files and optionally set them up.
+    
+    Returns True if all required files exist or were created,
+    False if the daemon should abort.
+    """
+    project_dir = _project_ampa_dir()
+    required_files = {
+        "workflow.json": os.path.join(project_dir, "workflow.json"),
+        "workflow-schema.json": os.path.join(project_dir, "workflow-schema.json"),
+    }
+    
+    missing = []
+    for name, path in required_files.items():
+        if not os.path.exists(path):
+            missing.append((name, path))
+    
+    if not missing:
+        LOG.info("All required AMPA files present in %s", project_dir)
+        return True
+    
+    # Check if we have XDG global fallbacks
+    xdg_dir = os.path.expanduser("~/.config/opencode/.worklog/ampa")
+    xdg_has_all = all(
+        os.path.exists(os.path.join(xdg_dir, name)) 
+        for name, _ in required_files
+    )
+    
+    if xdg_has_all:
+        # Copy from XDG to project
+        for name, path in required_files.copy().items():
+            src = os.path.join(xdg_dir, name)
+            if not os.path.exists(path):
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                import shutil
+                shutil.copy2(src, path)
+                LOG.info("Copied %s from XDG global config to project", name)
+        return True
+    
+    if not interactive:
+        LOG.warning("Missing required AMPA files: %s", [m[0] for m in missing])
+        return False
+    
+    # Interactive prompt
+    print("\n" + "=" * 60)
+    print("AMPA Setup: Missing required files")
+    print("=" * 60)
+    print(f"Project directory: {project_dir}")
+    print("\nMissing files:")
+    for name, path in missing:
+        print(f"  - {name} ({path})")
+    print("\nOptions:")
+    print("  1) Create default files from AMPA package)")
+    print("  2) Copy from XDG global config (~/.config/opencode/.worklog/ampa)")
+    print("  3) Abort daemon startup")
+    print("\n" + "-" * 60)
+    
     try:
-        xdg_base = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-        xdg_env = os.path.join(xdg_base, "opencode", ".worklog", "ampa", ".env")
-        LOG.info("Checking for XDG user .env at %s", xdg_env)
-        if os.path.isfile(xdg_env):
-            load_dotenv(xdg_env, override=True)
-            LOG.info("Loaded environment overrides from %s", xdg_env)
-            return
-    except Exception:
-        # Be conservative: any error here should not prevent other fallbacks.
-        LOG.debug("Failed to load XDG config .env (continuing to other lookups)")
-
-    # 2. Package-local .env (backward compat for single-project / local installs)
-    pkg_env_path = os.path.join(os.path.dirname(__file__), ".env")
-    LOG.info("Checking for package-local .env at %s", pkg_env_path)
-    if find_dotenv:
-        found = find_dotenv(pkg_env_path, usecwd=True)
-        if found:
-            load_dotenv(found, override=True)
-            LOG.info("Loaded environment overrides from %s", found)
-            return
-    elif os.path.isfile(pkg_env_path):
-        load_dotenv(pkg_env_path, override=True)
-        LOG.info("Loaded environment overrides from %s", pkg_env_path)
-        return
-
-    # 3. Legacy repo-root .env
-    root_env = os.path.join(os.getcwd(), ".env")
-    LOG.info("Checking for repo-root .env at %s", root_env)
-    if os.path.isfile(root_env):
-        load_dotenv(root_env, override=True)
-        LOG.info("Loaded environment overrides from %s", root_env)
-        return
-
-    LOG.info("No .env file found by load_env; proceeding with existing environment")
+        response = input("Choose option (1-3) [1]: ").strip() or "1"
+    except EOFError:
+        response = "3"
+    
+    if response == "1":
+        # Create from package defaults
+        package_dir = os.path.join(os.path.dirname(__file__), os.pardir)
+        for name, path in missing:
+            src = os.path.join(package_dir, name)
+            if os.path.exists(src):
+                import shutil
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                shutil.copy2(src, path)
+                LOG.info("Created %s from package default", name)
+        print("Default files created. Daemon will start.")
+        return True
+    elif response == "2":
+        # Copy from XDG
+        import shutil
+        for name, path in missing:
+            src = os.path.join(xdg_dir, name)
+            if os.path.exists(src):
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                shutil.copy2(src, path)
+                LOG.info("Copied %s from XDG to project", name)
+        print("Files copied from XDG. Daemon will start.")
+        return True
+    else:
+        print("Aborting daemon startup.")
+        return False
 
 
 def get_env_config() -> Dict[str, Any]:
@@ -248,6 +321,11 @@ def main() -> None:
         help="Start the scheduler loop under the daemon runtime",
     )
     args = parser.parse_args()
+
+    # Check for required AMPA files before proceeding
+    if not _check_required_files(interactive=True):
+        LOG.warning("Daemon startup aborted due to missing required files")
+        return
 
     try:
         config = get_env_config()

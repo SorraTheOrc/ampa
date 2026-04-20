@@ -15,6 +15,7 @@ Usage::
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence, Union
@@ -403,7 +404,22 @@ def _validate_against_schema(
             if (candidate / "pyproject.toml").exists():
                 break
             candidate = candidate.parent
-        schema_path = candidate / "docs" / "workflow" / "workflow-schema.json"
+        # Check multiple possible locations for the schema file
+        possible_paths = [
+            candidate / "docs" / "workflow" / "workflow-schema.json",
+            candidate / ".worklog" / "ampa" / "workflow-schema.json",
+        ]
+        # Also check for worklog in cwd (for per-project installs)
+        cwd = os.getcwd()
+        if cwd != str(candidate):
+            possible_paths.append(Path(cwd) / ".worklog" / "ampa" / "workflow-schema.json")
+        
+        for sp in possible_paths:
+            if sp.exists():
+                schema_path = sp
+                break
+        else:
+            schema_path = possible_paths[0]
     else:
         schema_path = Path(schema_path)
 
