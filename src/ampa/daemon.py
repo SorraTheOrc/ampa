@@ -127,12 +127,13 @@ def _check_required_files(interactive: bool = True) -> bool:
     xdg_dir = os.path.expanduser("~/.config/opencode/.worklog/ampa")
     xdg_has_all = all(
         os.path.exists(os.path.join(xdg_dir, name)) 
-        for name, _ in required_files
+        for name in required_files
     )
     
     if xdg_has_all:
         # Copy from XDG to project
-        for name, path in required_files.copy().items():
+        for name in required_files:
+            path = required_files[name]
             src = os.path.join(xdg_dir, name)
             if not os.path.exists(path):
                 os.makedirs(os.path.dirname(path), exist_ok=True)
