@@ -86,6 +86,25 @@ ampa_intake_avg_completion_seconds = Gauge(
 # Internal tracking for incremental counter updates
 _last_intake_processed_total = 0
 
+# Plan metrics: aggregated counters/gauges for automated plan observability
+ampa_plan_dispatched_total = Counter(
+    "ampa_plan_dispatched_total",
+    "Total number of plan items dispatched",
+    registry=registry,
+)
+ampa_plan_success_rate = Gauge(
+    "ampa_plan_success_rate",
+    "Fraction of successful plan runs (0.0-1.0)",
+    registry=registry,
+)
+ampa_plan_avg_completion_seconds = Gauge(
+    "ampa_plan_avg_completion_seconds",
+    "Average plan completion time in seconds",
+    registry=registry,
+)
+# Internal tracking for incremental counter updates
+_last_plan_dispatched_total = 0
+
 
 def _tool_output_dir() -> str:
     path = os.getenv("AMPA_TOOL_OUTPUT_DIR")

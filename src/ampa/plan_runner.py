@@ -19,6 +19,7 @@ from typing import Any
 from .intake_selector import IntakeCandidateSelector  # reuse helper shape
 from .engine.dispatch import OpenCodeRunDispatcher, DispatchResult
 from . import notifications
+from . import server as _server
 
 LOG = logging.getLogger("ampa.plan_runner")
 
@@ -441,6 +442,40 @@ class PlanRunner:
                         state["plan_metrics"] = metrics
                         state["plan_dispatches"] = dispatches
                         store.update_state(spec.command_id, state)
+                        # Update Prometheus metrics exposed by server module
+                        try:
+                            # Aggregate across per-item metrics
+                            total_dispatched = len(metrics)
+                            total_successes = sum(1 for m in metrics.values() if m.get("outcome") == "plan_complete")
+                            total_duration = sum(
+                                int(m.get("duration_seconds", 0)) for m in metrics.values()
+                            )
+
+                            if total_dispatched > 0:
+                                success_rate = float(total_successes) / float(total_dispatched)
+                                avg_completion = float(total_duration) / float(total_dispatched)
+                            else:
+                                success_rate = 0.0
+                                avg_completion = 0.0
+
+                            # Increment the counter by the delta since last update (server tracks last value)
+                            try:
+                                delta = total_dispatched - getattr(_server, "_last_plan_dispatched_total", 0)
+                                if delta > 0:
+                                    _server.ampa_plan_dispatched_total.inc(delta)
+                                # store last value for next delta computation
+                                _server._last_plan_dispatched_total = total_dispatched
+                            except Exception:
+                                # Best-effort: if counter manipulation fails, ignore
+                                pass
+
+                            try:
+                                _server.ampa_plan_success_rate.set(success_rate)
+                                _server.ampa_plan_avg_completion_seconds.set(avg_completion)
+                            except Exception:
+                                LOG.exception("Failed to set Prometheus plan gauges")
+                        except Exception:
+                            LOG.exception("Failed to update Prometheus plan metrics")
                     except Exception:
                         LOG.exception("Failed to persist plan dispatch outcome for %s", wid)
             except Exception:
