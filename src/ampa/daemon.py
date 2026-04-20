@@ -103,94 +103,69 @@ def load_env() -> None:
 
 
 def _check_required_files(interactive: bool = True) -> bool:
-    """Check for required AMPA files and optionally set them up.
-    
-    Returns True if all required files exist or were created,
-    False if the daemon should abort.
+    """Ensure required AMPA files exist under <project>/.worklog/ampa/
+
+    Auto-provision behavior (always-on):
+    - If files exist, return True.
+    - If files are missing, prefer copying from XDG per-user config
+      (~/.config/opencode/.worklog/ampa/). If present, copy missing files.
+    - Otherwise, create defaults from the packaged files shipped with AMPA.
+
+    Returns True when files are present (or were created). Returns False
+    only if all provisioning attempts fail.
     """
     project_dir = _project_ampa_dir()
     required_files = {
         "workflow.json": os.path.join(project_dir, "workflow.json"),
         "workflow-schema.json": os.path.join(project_dir, "workflow-schema.json"),
     }
-    
+
     missing = []
     for name, path in required_files.items():
         if not os.path.exists(path):
             missing.append((name, path))
-    
+
     if not missing:
         LOG.info("All required AMPA files present in %s", project_dir)
         return True
-    
-    # Check if we have XDG global fallbacks
+
+    # Attempt to copy from per-user XDG config if available
     xdg_dir = os.path.expanduser("~/.config/opencode/.worklog/ampa")
-    xdg_has_all = all(
-        os.path.exists(os.path.join(xdg_dir, name)) 
-        for name in required_files
-    )
-    
-    if xdg_has_all:
-        # Copy from XDG to project
-        for name in required_files:
-            path = required_files[name]
-            src = os.path.join(xdg_dir, name)
-            if not os.path.exists(path):
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-                import shutil
-                shutil.copy2(src, path)
-                LOG.info("Copied %s from XDG global config to project", name)
-        return True
-    
-    if not interactive:
-        LOG.warning("Missing required AMPA files: %s", [m[0] for m in missing])
-        return False
-    
-    # Interactive prompt
-    print("\n" + "=" * 60)
-    print("AMPA Setup: Missing required files")
-    print("=" * 60)
-    print(f"Project directory: {project_dir}")
-    print("\nMissing files:")
-    for name, path in missing:
-        print(f"  - {name} ({path})")
-    print("\nOptions:")
-    print("  1) Create default files from AMPA package)")
-    print("  2) Copy from XDG global config (~/.config/opencode/.worklog/ampa)")
-    print("  3) Abort daemon startup")
-    print("\n" + "-" * 60)
-    
+    xdg_available = any(os.path.exists(os.path.join(xdg_dir, name)) for name, _ in missing)
+    if xdg_available:
+        try:
+            import shutil
+            for name, path in missing:
+                src = os.path.join(xdg_dir, name)
+                if os.path.exists(src):
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    shutil.copy2(src, path)
+                    LOG.info("Copied %s from XDG global config to project", name)
+            # Recompute missing after copy
+            missing = [m for m in missing if not os.path.exists(m[1])]
+            if not missing:
+                return True
+        except Exception:
+            LOG.exception("Failed to copy required files from XDG config")
+
+    # Fall back to packaged defaults
     try:
-        response = input("Choose option (1-3) [1]: ").strip() or "1"
-    except EOFError:
-        response = "3"
-    
-    if response == "1":
-        # Create from package defaults
-        package_dir = os.path.join(os.path.dirname(__file__), os.pardir)
+        package_dir = os.path.join(os.path.dirname(__file__), os.pardir, "docs", "workflow")
+        import shutil
         for name, path in missing:
             src = os.path.join(package_dir, name)
             if os.path.exists(src):
-                import shutil
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 shutil.copy2(src, path)
-                LOG.info("Created %s from package default", name)
-        print("Default files created. Daemon will start.")
-        return True
-    elif response == "2":
-        # Copy from XDG
-        import shutil
-        for name, path in missing:
-            src = os.path.join(xdg_dir, name)
-            if os.path.exists(src):
-                os.makedirs(os.path.dirname(path), exist_ok=True)
-                shutil.copy2(src, path)
-                LOG.info("Copied %s from XDG to project", name)
-        print("Files copied from XDG. Daemon will start.")
-        return True
-    else:
-        print("Aborting daemon startup.")
-        return False
+                LOG.info("Created %s from packaged defaults", name)
+        missing = [m for m in missing if not os.path.exists(m[1])]
+        if not missing:
+            return True
+    except Exception:
+        LOG.exception("Failed to create default workflow files from package")
+
+    LOG.error("Failed to provision required AMPA files: %s", [m[0] for m in missing])
+    return False
 
 
 def get_env_config() -> Dict[str, Any]:
