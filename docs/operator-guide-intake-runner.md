@@ -60,3 +60,11 @@ Troubleshooting
 Contact
 
 - For operational questions, contact the AMPA maintainers (see project CODEOWNERS) or open an operator issue in the project's backlog.
+
+Test cleanup policy and fixture
+
+- Rationale: automated intake tests sometimes create transient worklog items (for example, items titled "do not ask questions") which can persist across runs and pollute the worklog. Tests should avoid leaving live test items behind.
+- Policy: tests MUST create worklog items using a strict test-only prefix (TEST-CI-) or a unique test-run identifier so they can be identified for cleanup. Tests SHOULD use the provided fixture to create and register transient items.
+- Provided utility: the repository provides a pytest fixture `wl_test_items` (tests/conftest.py) which returns a factory create(suffix) -> dict. Items created with this helper are deleted during test teardown. A demonstration test is included at tests/test_worklog_cleanup_fixture.py.
+- Safety: the fixture deletes items by matching the strict TEST-CI- prefix. This minimizes risk of accidentally removing production items. The fixture will no-op if the `wl` CLI is not available in the test environment.
+

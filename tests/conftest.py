@@ -1,33 +1,62 @@
-"""Global pytest fixtures for the ampa test suite."""
-
-# Ensure the package source directory is on sys.path so tests running from
-# the repository root can import the package without an editable/installed
-# installation. This supports the src/ layout used by this project.
-import os
-import sys
+import subprocess
+import json
 import pytest
+from typing import Optional
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-SRC = os.path.join(ROOT, "src")
-if SRC not in sys.path:
-    sys.path.insert(0, SRC)
+TEST_PREFIX = "TEST-CI-"
 
-# Ensure repository root is on sys.path so top-level modules living at the
-# repository root (e.g. `skill/`, `scripts/`, `plan/`) can be imported by
-# tests that reference them as top-level packages.
-if ROOT not in sys.path:
-    sys.path.insert(0, ROOT)
+@pytest.fixture
+def wl_test_items(request):
+    """Helper fixture to create worklog test items and ensure cleanup after the test.
 
-
-@pytest.fixture(autouse=True)
-def _limit_notification_retries(monkeypatch):
-    """Cap notification retries to 1 for every test.
-
-    The retry/backoff logic in ampa.notifications._send_via_socket() defaults
-    to 10 retries with exponential backoff (total ~17 min of sleeping).  In CI
-    the Unix-domain socket is absent so every unprotected notify() call would
-    sleep through the full retry budget and hit the 30-second per-test timeout.
-
-    Setting AMPA_MAX_RETRIES=1 ensures a single fast failure instead.
+    Returns a factory function create(suffix) -> dict(json response from `wl create`).
+    The fixture registers a finalizer that will attempt to delete any work items whose
+    title begins with TEST_PREFIX to avoid accidental deletion of production items.
     """
-    monkeypatch.setenv("AMPA_MAX_RETRIES", "1")
+    created_ids = []
+
+    def create(suffix: Optional[str] = None):
+        title = f"{TEST_PREFIX}{suffix or request.node.name}"
+        cmd = ["wl", "create", "--title", title, "--json"]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        if res.returncode != 0:
+            raise RuntimeError(f"wl create failed: {res.stderr}")
+        try:
+            data = json.loads(res.stdout)
+        except Exception:
+            # Fallback: return raw stdout if JSON parsing fails
+            data = {"raw": res.stdout}
+        # Attempt to extract id if present
+        wid = None
+        if isinstance(data, dict):
+            wid = data.get("id") or (data.get("workItem") or {}).get("id")
+        if wid:
+            created_ids.append(wid)
+        return data
+
+    def _finalize():
+        # Search for any remaining test-prefixed items and delete them.
+        try:
+            search = subprocess.run(["wl", "search", TEST_PREFIX, "--json"], capture_output=True, text=True)
+            if search.returncode == 0 and search.stdout.strip():
+                try:
+                    items = json.loads(search.stdout)
+                except Exception:
+                    items = []
+                ids = []
+                for it in items:
+                    if isinstance(it, dict):
+                        if it.get("title", "").startswith(TEST_PREFIX):
+                            ids.append(it.get("id"))
+                # Ensure we also include any known created ids
+                ids.extend(x for x in created_ids if x not in ids)
+                # Deduplicate
+                ids = list(dict.fromkeys([i for i in ids if i]))
+                for wid in ids:
+                    subprocess.run(["wl", "delete", wid])
+        except FileNotFoundError:
+            # `wl` not available in this environment; nothing to do
+            pass
+
+    request.addfinalizer(_finalize)
+    return create
