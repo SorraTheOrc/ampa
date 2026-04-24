@@ -760,8 +760,14 @@ class Scheduler:
                             # on-disk name separate from the attachment filename.
                             disk_filename = f"audit-{work_item_id_local}-{timestamp}.md"
                             full_path = os.path.join(audit_dir, disk_filename)
+                            # Ensure the on-disk full report contains the audit header
+                            # so attachments always include the one-line context even
+                            # when the message body is not shown by the bot client.
+                            full_md_to_write = f"{audit_line}\n\n{full_md_local}" if full_md_local else audit_line
                             with open(full_path, "w", encoding="utf-8") as fh:
-                                fh.write(full_md_local)
+                                fh.write(full_md_to_write)
+                            # Also use the header-prefixed content for the attachment
+                            full_md_local = full_md_to_write
                         except Exception:
                             LOG.exception("Failed to persist full audit markdown to disk")
                             # Fall back to in-memory attachment when persistence fails
