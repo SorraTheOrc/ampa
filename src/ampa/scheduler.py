@@ -778,11 +778,13 @@ class Scheduler:
                         # Include explicit ready-to-close token when provided so
                         # Discord messages always contain a machine-friendly
                         # one-line statement in a predictable location.
+                        # Add a one-line audit header before the report content for clarity
+                        audit_line = f"Audit report for {work_item_id_local} {title_base}"
                         if ready_value:
                             ready_line = f"- Ready to close: {ready_value}"
-                            content = f"# {title_with_id_local}\n\n{ready_line}\n\n```md\n{inline_md}\n```"
+                            content = f"# {title_with_id_local}\n\n{audit_line}\n\n{ready_line}\n\n```md\n{inline_md}\n```"
                         else:
-                            content = f"# {title_with_id_local}\n\n```md\n{inline_md}\n```"
+                            content = f"# {title_with_id_local}\n\n{audit_line}\n\n```md\n{inline_md}\n```"
                         if full_path:
                             # Include the filesystem path in the message body for
                             # operator convenience, but send a small stable
