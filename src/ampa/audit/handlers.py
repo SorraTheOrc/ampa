@@ -208,7 +208,7 @@ def _format_audit_comment(audit_result: AuditResult) -> str:
     Matches the format expected by the ``requires_audit_result`` invariant
     and consumed by downstream handlers.
     """
-    parts = ["# AMPA Audit Result", ""]
+    parts = ["## AMPA Audit Result", ""]
 
     if audit_result.summary:
         parts.append(f"## Summary\n\n{audit_result.summary}")
