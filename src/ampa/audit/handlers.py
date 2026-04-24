@@ -41,6 +41,7 @@ import os
 import re
 import subprocess
 import json
+import shlex
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Sequence
 
@@ -616,7 +617,10 @@ class AuditResultHandler:
         # that inspect the rendered command (eg. "opencode run ...") match
         # reliably. Shell quoting is acceptable here because the prompt is a
         # controlled internal string.
-        cmd = f"opencode run {prompt}"
+        # Quote the prompt for the shell so characters like parentheses
+        # and colons are not interpreted by /bin/sh. Use shlex.quote to
+        # produce a safely-quoted single-string argument.
+        cmd = f"opencode run {shlex.quote(prompt)}"
         try:
             proc = self._run_shell(
                 cmd,

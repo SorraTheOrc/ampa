@@ -243,7 +243,7 @@ class IntakeDispatcher:
         # Build the canonical intake command using the --agent and --command
         # flags as required by the runtime.
         intake_cmd = (
-            f"opencode run --agent Casey --command intake {work_item_id} do not ask questions"
+            f'opencode run --agent Casey --command "intake {work_item_id} do not ask questions"'
         )
         LOG.info("IntakeDispatcher dispatching %s: %s", work_item_id, intake_cmd)
 

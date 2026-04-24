@@ -112,49 +112,14 @@ AuditParseResult = Union[AuditResult, ParseError]
 
 
 def extract_report(text: str) -> str:
-    """Extract the structured audit report from raw audit output.
+    """Return the full audit output text.
 
-    Looks for ``--- AUDIT REPORT START ---`` and
-    ``--- AUDIT REPORT END ---`` delimiter lines.  Returns the content
-    between these markers (stripped of leading/trailing whitespace).
-
-    Fallback behavior:
-
-    - If the start marker is missing the full *text* is returned with a
-      warning.
-    - If the start marker is present but the end marker is missing, all
-      content after the start marker is returned (with a warning).
-    - If the extracted content is empty, the full *text* is returned
-      with a warning.
-    - When multiple marker pairs exist only the **first** pair is used.
+    The project no longer relies on marker-delimited audit reports, so
+    always return the complete raw output for downstream parsing.
     """
     if not text:
         return ""
-
-    start_idx = text.find(AUDIT_REPORT_START)
-    if start_idx == -1:
-        LOG.warning(
-            "Audit output missing start marker (%s); using full output",
-            AUDIT_REPORT_START,
-        )
-        return text
-
-    content_start = start_idx + len(AUDIT_REPORT_START)
-    end_idx = text.find(AUDIT_REPORT_END, content_start)
-    if end_idx == -1:
-        LOG.warning(
-            "Audit output missing end marker (%s); using content after start marker",
-            AUDIT_REPORT_END,
-        )
-        extracted = text[content_start:].strip()
-    else:
-        extracted = text[content_start:end_idx].strip()
-
-    if not extracted:
-        LOG.warning("Extracted audit report is empty; falling back to full output")
-        return text
-
-    return extracted
+    return text
 
 
 # ---------------------------------------------------------------------------
