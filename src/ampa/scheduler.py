@@ -749,6 +749,10 @@ class Scheduler:
 
                         # Persist full markdown to a discoverable project-local
                         # path: .worklog/audit/audit-<id>-<ts>.md
+                        # Build audit_line here so it is available both for the
+                        # on-disk file and for the Discord message body.
+                        audit_line = f"Audit report for {work_item_id_local} {title_base}"
+
                         try:
                             audit_dir = os.path.join(os.getcwd(), ".worklog", "audit")
                             os.makedirs(audit_dir, exist_ok=True)
@@ -784,8 +788,6 @@ class Scheduler:
                         # Include explicit ready-to-close token when provided so
                         # Discord messages always contain a machine-friendly
                         # one-line statement in a predictable location.
-                        # Add a one-line audit header before the report content for clarity
-                        audit_line = f"Audit report for {work_item_id_local} {title_base}"
                         if ready_value:
                             ready_line = f"- Ready to close: {ready_value}"
                             content = f"# {title_with_id_local}\n\n{audit_line}\n\n{ready_line}\n\n```md\n{inline_md}\n```"
