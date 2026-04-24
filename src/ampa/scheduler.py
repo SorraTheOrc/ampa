@@ -790,9 +790,9 @@ class Scheduler:
                         # one-line statement in a predictable location.
                         if ready_value:
                             ready_line = f"- Ready to close: {ready_value}"
-                            content = f"{audit_line}\n\n{ready_line}\n\n```md\n{inline_md}\n```"
+                            content = f"{audit_line}\n\n{ready_line}\n\n{inline_md}"
                         else:
-                            content = f"{audit_line}\n\n```md\n{inline_md}\n```"
+                            content = f"{audit_line}\n\n{inline_md}"
                         if full_path:
                             # Include the filesystem path in the message body for
                             # operator convenience, but send a small stable
