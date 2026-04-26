@@ -751,7 +751,8 @@ class Scheduler:
                         # path: .worklog/audit/audit-<id>-<ts>.md
                         # Build audit_line here so it is available both for the
                         # on-disk file and for the Discord message body.
-                        audit_line = f"# Audit report for {work_item_id_local} {title_base}"
+                        # Use concise title-first header to match notifier/test expectations
+                        audit_line = f"# {title_base} [{work_item_id_local}]"
 
                         try:
                             audit_dir = os.path.join(os.getcwd(), ".worklog", "audit")

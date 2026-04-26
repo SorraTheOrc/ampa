@@ -112,13 +112,39 @@ AuditParseResult = Union[AuditResult, ParseError]
 
 
 def extract_report(text: str) -> str:
-    """Return the full audit output text.
+    """Extract the audit report between the start/end markers.
 
-    The project no longer relies on marker-delimited audit reports, so
-    always return the complete raw output for downstream parsing.
+    If both markers are present, return the first report's inner content
+    (text between the markers) trimmed of surrounding whitespace. If the
+    extracted content is empty (or only whitespace), fall back to returning
+    the full raw text. If the start marker is missing, return the raw
+    text unchanged. If the start marker exists but the end marker is
+    missing, return everything after the start marker.
     """
     if not text:
         return ""
+
+    start_idx = text.find(AUDIT_REPORT_START)
+    if start_idx == -1:
+        # No start marker — return full text
+        return text
+
+    # Move to the end of the start marker
+    start_pos = start_idx + len(AUDIT_REPORT_START)
+    # Look for the next end marker after the start
+    end_idx = text.find(AUDIT_REPORT_END, start_pos)
+    if end_idx == -1:
+        # No end marker — return everything after the start marker
+        extracted = text[start_pos:]
+        return extracted.strip()
+
+    # Extract content between markers
+    extracted = text[start_pos:end_idx]
+    # Trim surrounding whitespace
+    extracted_stripped = extracted.strip()
+    if extracted_stripped:
+        return extracted_stripped
+    # Fallback: if the inner content is empty, return raw text
     return text
 
 

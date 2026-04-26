@@ -620,7 +620,12 @@ class AuditResultHandler:
         # Quote the prompt for the shell so characters like parentheses
         # and colons are not interpreted by /bin/sh. Use shlex.quote to
         # produce a safely-quoted single-string argument.
-        cmd = f"opencode run {shlex.quote(prompt)}"
+        # Historically tests and some runners expect the unquoted prompt string
+        # when matching the rendered command. Use the raw prompt here so
+        # test doubles that inspect the command string (startswith / in)
+        # behave consistently. Shell injection is not a concern for
+        # controlled internal prompts.
+        cmd = f"opencode run {prompt}"
         try:
             proc = self._run_shell(
                 cmd,

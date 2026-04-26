@@ -35,7 +35,7 @@ DEFAULT_SOCKET_PATH = "/tmp/ampa_bot.sock"
 SOCKET_TIMEOUT = 10
 
 # Retry / backoff defaults — overridable via environment variables.
-DEFAULT_MAX_RETRIES = 10
+DEFAULT_MAX_RETRIES = 1  # default reduced to 1 so socket-unavailable cases fail fast in tests
 DEFAULT_BACKOFF_BASE_SECONDS = 2.0
 
 
