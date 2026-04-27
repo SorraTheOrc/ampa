@@ -315,11 +315,16 @@ The plan-runner is an automated scheduled task that progresses work items from
 
 **How it works:**
 
-1. Queries `wl next --stage intake_complete` for candidates
-2. Selects the top candidate using deterministic selection semantics
-3. Dispatches an opencode `/plan {id}` session via the dispatch system
-4. Monitors completion and records metrics
-5. Handles retries with exponential backoff on failure
+1. Processes previously recorded dispatches before each new selection cycle.
+   - Checks `wl show <id> --children --json` for completion (`stage=plan_complete`).
+   - Supports `wl show` payload shapes: `workItem`, `workItems[0]`, and direct object.
+   - Marks timed-out dispatches using `AMPA_PLAN_COMPLETION_TIMEOUT` (default: 4h).
+   - Persists `plan_metrics` outcomes and clears stale dispatch `pid` values only after observation.
+2. Queries `wl next --stage intake_complete` for candidates.
+3. Selects the top candidate using deterministic selection semantics.
+4. Dispatches an opencode `/plan {id}` session via the dispatch system.
+5. Monitors completion and records metrics.
+6. Handles retries with exponential backoff on failure.
 
 **Configuration:**
 
