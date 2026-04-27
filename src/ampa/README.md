@@ -350,9 +350,9 @@ The plan-runner maintains separate scheduler state namespaces:
 **Prometheus Metrics:**
 
 Exposed metrics:
-- `ampa_plan_dispatched_total`: Counter for total dispatches
-- `ampa_plan_success_rate`: Gauge for success rate (0.0-1.0)
-- `ampa_plan_avg_completion_seconds`: Gauge for average completion time
+- `ampa_plan_dispatched_total`: Counter for total observed dispatch outcomes (delta-updated to avoid double-counting across repeated processing cycles)
+- `ampa_plan_success_rate`: Gauge computed as `plan_complete_outcomes / total_observed_outcomes` for the current aggregated plan metrics state
+- `ampa_plan_avg_completion_seconds`: Gauge computed as `sum(duration_seconds) / total_observed_outcomes`
 
 **Discord Notifications:**
 
