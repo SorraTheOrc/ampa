@@ -282,3 +282,98 @@ def test_run_processes_previous_dispatches_before_query(monkeypatch):
 
     assert result == {"planned": None}
     assert call_order == ["process", "query"]
+
+
+def test_process_previous_dispatches_updates_plan_prometheus_metrics(monkeypatch):
+    import ampa.server as srv
+    from ampa.plan_runner import PlanRunner
+
+    # Reset internal delta tracker so this test can assert increments deterministically.
+    monkeypatch.setattr(srv, "_last_plan_dispatched_total", 0)
+
+    now = dt.datetime.now(dt.timezone.utc)
+    started_1 = (now - dt.timedelta(seconds=10)).isoformat()
+    started_2 = (now - dt.timedelta(seconds=30)).isoformat()
+
+    store = make_store()
+    store.update_state(
+        "plan-runner",
+        {
+            "plan_dispatches": {
+                "WL-MET-1": {"started_at": started_1, "pid": 111},
+                "WL-MET-2": {"started_at": started_2, "pid": 222},
+            }
+        },
+    )
+
+    # First item is complete, second item times out.
+    monkeypatch.setenv("AMPA_PLAN_COMPLETION_TIMEOUT", "20")
+
+    def run_shell(cmd, **kwargs):
+        if "WL-MET-1" in cmd:
+            return DummyProc(json.dumps({"workItem": {"id": "WL-MET-1", "stage": "plan_complete"}}), 0)
+        return DummyProc(json.dumps({"workItem": {"id": "WL-MET-2", "stage": "intake_complete"}}), 0)
+
+    before_counter = srv.ampa_plan_dispatched_total._value.get()
+
+    runner = PlanRunner(run_shell=run_shell, command_cwd="/tmp")
+    spec = SimpleNamespace(command_id="plan-runner", metadata={})
+    runner._process_previous_dispatches(spec, store)
+
+    state = store.get_state("plan-runner")
+    metrics = state["plan_metrics"]
+    total = len(metrics)
+    successes = sum(1 for m in metrics.values() if m.get("outcome") == "plan_complete")
+    total_duration = sum(int(m.get("duration_seconds", 0)) for m in metrics.values())
+
+    assert total == 2
+    assert metrics["WL-MET-1"]["outcome"] == "plan_complete"
+    assert metrics["WL-MET-2"]["outcome"] == "timeout"
+
+    # Counter increments only by observed total delta.
+    assert srv.ampa_plan_dispatched_total._value.get() == pytest.approx(before_counter + total)
+    assert srv.ampa_plan_success_rate._value.get() == pytest.approx(successes / total)
+    assert srv.ampa_plan_avg_completion_seconds._value.get() == pytest.approx(total_duration / total)
+
+
+def test_process_previous_dispatches_counter_delta_prevents_double_count(monkeypatch):
+    import ampa.server as srv
+    from ampa.plan_runner import PlanRunner
+
+    monkeypatch.setattr(srv, "_last_plan_dispatched_total", 0)
+
+    store = make_store()
+    started_1 = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)).isoformat()
+    store.update_state(
+        "plan-runner",
+        {"plan_dispatches": {"WL-DELTA-1": {"started_at": started_1, "pid": 10}}},
+    )
+
+    def run_shell(cmd, **kwargs):
+        return DummyProc(json.dumps({"workItem": {"stage": "plan_complete"}}), 0)
+
+    runner = PlanRunner(run_shell=run_shell, command_cwd="/tmp")
+    spec = SimpleNamespace(command_id="plan-runner", metadata={})
+
+    base = srv.ampa_plan_dispatched_total._value.get()
+    runner._process_previous_dispatches(spec, store)
+    after_first = srv.ampa_plan_dispatched_total._value.get()
+
+    # Re-processing without new observations must not inflate the counter.
+    runner._process_previous_dispatches(spec, store)
+    after_second = srv.ampa_plan_dispatched_total._value.get()
+
+    # Add one new dispatch outcome and verify only +1 is added.
+    state = store.get_state("plan-runner")
+    state.setdefault("plan_dispatches", {})["WL-DELTA-2"] = {
+        "started_at": (dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)).isoformat(),
+        "pid": 11,
+    }
+    store.update_state("plan-runner", state)
+
+    runner._process_previous_dispatches(spec, store)
+    after_third = srv.ampa_plan_dispatched_total._value.get()
+
+    assert after_first == pytest.approx(base + 1)
+    assert after_second == pytest.approx(after_first)
+    assert after_third == pytest.approx(after_second + 1)
