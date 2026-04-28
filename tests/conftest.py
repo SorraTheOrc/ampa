@@ -60,3 +60,34 @@ def wl_test_items(request):
 
     request.addfinalizer(_finalize)
     return create
+
+
+# ------------------------------------------------------------------
+# Session-level cleanup: ensure no lingering WL- prefixed work items
+# remain in the Worklog database after the test session. Some older
+# tests or external tools may create WL- ID work items; to enforce the
+# project policy we delete any WL- items at session end. This uses the
+# `wl` CLI so the deletion is recorded properly in Worklog.
+# ------------------------------------------------------------------
+
+def pytest_sessionfinish(session, exitstatus):
+    try:
+        res = subprocess.run(["wl", "search", "WL-", "--json"], capture_output=True, text=True)
+        if res.returncode == 0 and res.stdout.strip():
+            try:
+                items = json.loads(res.stdout)
+            except Exception:
+                items = []
+            ids = []
+            for it in items:
+                if isinstance(it, dict):
+                    wid = it.get("id")
+                    if wid and wid.startswith("WL-"):
+                        ids.append(wid)
+            # Deduplicate and delete
+            ids = list(dict.fromkeys(ids))
+            for wid in ids:
+                subprocess.run(["wl", "delete", wid, "--json"], capture_output=True)
+    except FileNotFoundError:
+        # `wl` not available; nothing we can do
+        pass
