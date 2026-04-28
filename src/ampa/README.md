@@ -363,9 +363,11 @@ Exposed metrics:
 **Discord Notifications:**
 
 Sent on:
-- Plan candidate selection
-- Permanent failure (after max_retries exhausted)
-- Dispatch errors
+- Successful plan dispatch (includes work item title and id)
+- Permanent failure after retry exhaustion (`max_retries` reached, includes attempt count)
+
+Notification delivery is best-effort: notify exceptions are logged and do not stop
+scheduler state updates or the runner cycle.
 
 Conversation manager
 --------------------

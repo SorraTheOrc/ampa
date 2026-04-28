@@ -26,7 +26,7 @@ class DummyProc:
         self.returncode = returncode
 
 
-def test_plan_success_clears_retries(monkeypatch):
+def test_plan_success_clears_retries_and_notifies(monkeypatch):
     from ampa.plan_runner import PlanRunner
 
     store = make_store()
@@ -58,25 +58,29 @@ def test_plan_success_clears_retries(monkeypatch):
             return candidates[0] if candidates else None
 
     monkeypatch.setattr(pr, "PlanCandidateSelector", DummySelector)
-
     monkeypatch.setattr(pr, "PlanDispatcher", lambda *a, **k: DummyDispatcher())
+
+    calls = []
+
+    def fake_notify(title, body, message_type=None):
+        calls.append((title, body, message_type))
+
+    monkeypatch.setattr(pr, "notifications", SimpleNamespace(notify=fake_notify))
 
     runner = PlanRunner(run_shell=lambda *a, **k: None, command_cwd=".")
     spec = SimpleNamespace(command_id=cmd_id, metadata={})
-
-    # also patch notifications.notify to ensure it's not called
-    called = {}
-
-    def fake_notify(*a, **k):
-        called['notified'] = True
-
-    monkeypatch.setattr(pr, "notifications", SimpleNamespace(notify=fake_notify))
 
     res = runner.run(spec, store)
     st = store.get_state(cmd_id)
     # retries for WL-1 should be cleared on success
     assert st.get("plan_retries", {}) == {}
     assert res["planned"] == "WL-1"
+    assert calls
+    title, body, message_type = calls[0]
+    assert title == "Automated Plan Dispatched"
+    assert "WL-1" in body
+    assert "Test Item" in body
+    assert message_type == "plan"
 
 
 def test_plan_failure_schedules_backoff(monkeypatch):
@@ -136,6 +140,66 @@ def test_plan_failure_schedules_backoff(monkeypatch):
     assert 14 * 60 <= delta <= 16 * 60
 
 
+def test_plan_posts_worklog_comment_on_dispatch(monkeypatch):
+    from ampa.plan_runner import PlanRunner
+
+    store = make_store()
+    cmd_id = "plan-runner"
+    store.update_state(cmd_id, {})
+
+    from ampa.engine.dispatch import DispatchResult
+
+    def fake_dispatch(command, work_item_id):
+        return DispatchResult(
+            success=True,
+            command=command,
+            work_item_id=work_item_id,
+            timestamp=dt.datetime.now(dt.timezone.utc),
+            pid=456,
+        )
+
+    class DummyDispatcher:
+        def dispatch(self, command, work_item_id):
+            return fake_dispatch(command, work_item_id)
+
+    import ampa.plan_runner as pr
+
+    class DummySelector:
+        def __init__(self, run_shell=None, cwd=None):
+            pass
+
+        def query_candidates(self):
+            return [{"id": "WL-1", "title": "Test Item"}]
+
+        def select_top(self, candidates):
+            return candidates[0] if candidates else None
+
+    monkeypatch.setattr(pr, "PlanCandidateSelector", DummySelector)
+    monkeypatch.setattr(pr, "PlanDispatcher", lambda *a, **k: DummyDispatcher())
+
+    calls = []
+
+    class DummyProc:
+        returncode = 0
+        stdout = "{}"
+        stderr = ""
+
+    def run_shell(cmd, **kwargs):
+        calls.append(cmd)
+        return DummyProc()
+
+    runner = PlanRunner(run_shell=run_shell, command_cwd=".")
+    spec = SimpleNamespace(command_id=cmd_id, metadata={})
+
+    res = runner.run(spec, store)
+    assert res["planned"] == "WL-1"
+
+    comment_calls = [c for c in calls if c.startswith("wl comment add WL-1")]
+    assert comment_calls, "Expected a wl comment add call for dispatched plan"
+    assert '--author "ampa"' in comment_calls[0]
+    assert "Automated plan dispatched by AMPA" in comment_calls[0]
+
+
 def test_plan_permanent_failure_notifies(monkeypatch):
     from ampa.plan_runner import PlanRunner
 
@@ -178,7 +242,7 @@ def test_plan_permanent_failure_notifies(monkeypatch):
     # set max_retries to 1 so first failure becomes permanent
     spec = SimpleNamespace(command_id=cmd_id, metadata={"max_retries": 1})
 
-    res = runner.run(spec, store)
+    runner.run(spec, store)
     st = store.get_state(cmd_id)
     retries = st.get("plan_retries", {})
     entry = retries.get("WL-1")
@@ -186,6 +250,92 @@ def test_plan_permanent_failure_notifies(monkeypatch):
     assert entry.get("permanent_failure") is True
     # Notification should have been sent
     assert any("permanent failure" in (t.lower() if t else "") for t, *_ in calls)
+    assert any("after 1 attempt(s)" in body for _, body, _ in calls)
+
+
+def test_plan_success_notification_failure_is_non_fatal(monkeypatch):
+    from ampa.plan_runner import PlanRunner
+
+    store = make_store()
+    cmd_id = "plan-runner"
+    store.update_state(cmd_id, {"plan_retries": {"WL-1": {"attempts": 1}}})
+
+    from ampa.engine.dispatch import DispatchResult
+
+    class DummyDispatcher:
+        def dispatch(self, command, work_item_id):
+            return DispatchResult(success=True, command=command, work_item_id=work_item_id, timestamp=dt.datetime.now(dt.timezone.utc), pid=123)
+
+    import ampa.plan_runner as pr
+
+    class DummySelector:
+        def __init__(self, run_shell=None, cwd=None):
+            pass
+
+        def query_candidates(self):
+            return [{"id": "WL-1", "title": "Test Item"}]
+
+        def select_top(self, candidates):
+            return candidates[0] if candidates else None
+
+    monkeypatch.setattr(pr, "PlanCandidateSelector", DummySelector)
+    monkeypatch.setattr(pr, "PlanDispatcher", lambda *a, **k: DummyDispatcher())
+
+    def fake_notify(*_args, **_kwargs):
+        raise RuntimeError("discord down")
+
+    monkeypatch.setattr(pr, "notifications", SimpleNamespace(notify=fake_notify))
+
+    runner = PlanRunner(run_shell=lambda *a, **k: None, command_cwd=".")
+    spec = SimpleNamespace(command_id=cmd_id, metadata={})
+
+    result = runner.run(spec, store)
+
+    assert result["planned"] == "WL-1"
+    assert store.get_state(cmd_id).get("plan_retries", {}) == {}
+
+
+def test_plan_permanent_failure_notification_failure_is_non_fatal(monkeypatch):
+    from ampa.plan_runner import PlanRunner
+
+    store = make_store()
+    cmd_id = "plan-runner"
+    store.update_state(cmd_id, {})
+
+    from ampa.engine.dispatch import DispatchResult
+
+    class DummyDispatcher:
+        def dispatch(self, command, work_item_id):
+            return DispatchResult(success=False, command=command, work_item_id=work_item_id, timestamp=dt.datetime.now(dt.timezone.utc), pid=None, error="boom")
+
+    import ampa.plan_runner as pr
+
+    class DummySelector:
+        def __init__(self, run_shell=None, cwd=None):
+            pass
+
+        def query_candidates(self):
+            return [{"id": "WL-1", "title": "Test Item"}]
+
+        def select_top(self, candidates):
+            return candidates[0] if candidates else None
+
+    monkeypatch.setattr(pr, "PlanCandidateSelector", DummySelector)
+    monkeypatch.setattr(pr, "PlanDispatcher", lambda *a, **k: DummyDispatcher())
+
+    def fake_notify(*_args, **_kwargs):
+        raise RuntimeError("discord down")
+
+    monkeypatch.setattr(pr, "notifications", SimpleNamespace(notify=fake_notify))
+
+    runner = PlanRunner(run_shell=lambda *a, **k: None, command_cwd=".")
+    spec = SimpleNamespace(command_id=cmd_id, metadata={"max_retries": 1})
+
+    result = runner.run(spec, store)
+
+    assert result["planned"] == "WL-1"
+    retries = store.get_state(cmd_id).get("plan_retries", {})
+    assert retries.get("WL-1", {}).get("permanent_failure") is True
 
 
 @pytest.mark.parametrize(

@@ -7,7 +7,8 @@ AMPA (Automated Project Management Agent) is an intelligent project management a
 AMPA provides automated project management capabilities including:
 
 - **Automated Scheduling**: Intelligent task scheduling and delegation
-- **Discord Integration**: Bot for notifications and team communication
+- **Plan Runner Automation**: Auto-dispatches `/plan {id}` for eligible `intake_complete` items
+- **Discord Integration**: Bot for notifications and team communication (including plan-runner dispatch success and permanent-failure alerts)
 - **Audit & Monitoring**: Continuous project health monitoring
 - **PR Monitoring**: Automated pull request tracking and notifications
 - **Session Management**: Work session blocking and management
@@ -45,6 +46,23 @@ OPENAI_API_KEY=your_openai_api_key
 ```
 
 Configuration files are stored in the project's `.worklog/ampa/` directory.
+
+### Plan-runner scheduler defaults
+
+AMPA auto-registers a `plan-runner` scheduled command (for non-`:memory:` stores) with:
+
+- `command_type`: `plan-runner`
+- `frequency_minutes`: `15`
+- `metadata.enabled`: `true` (set to `false` to pause execution without removing the command)
+- optional overrides:
+  - `metadata.max_retries` (default `3`)
+  - `metadata.backoff_base_minutes` (default `15`)
+
+Plan-runner state is tracked under dedicated scheduler namespaces:
+
+- `plan_dispatches`
+- `plan_retries`
+- `plan_metrics`
 
 ## Development
 

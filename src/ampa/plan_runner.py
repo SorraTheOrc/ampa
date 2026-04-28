@@ -158,19 +158,8 @@ class PlanRunner:
             LOG.warning("Plan runner: selected candidate missing id")
             return {"planned": None}
 
-        LOG.info("Plan runner: selected candidate %s — %s", wid, selected.get("title") or selected.get("name") or "(no title)")
-
-        # Integration: notify operators of plan candidate selection
-        try:
-            title_text = selected.get("title") or selected.get("name") or "(no title)"
-            notif_title = "Automated Plan Selected"
-            notif_body = f"{title_text} ({wid}) has been selected for automated planning."
-            try:
-                notifications.notify(notif_title, notif_body, message_type="plan")
-            except Exception:
-                LOG.exception("Failed to send plan notification for %s", wid)
-        except Exception:
-            LOG.exception("Failed to build/send plan notification for %s", wid)
+        title_text = selected.get("title") or selected.get("name") or "(no title)"
+        LOG.info("Plan runner: selected candidate %s — %s", wid, title_text)
 
         # Read state
         try:
@@ -319,6 +308,16 @@ class PlanRunner:
                 store.update_state(spec.command_id, state)
             except Exception:
                 LOG.exception("Failed to persist plan dispatch state for %s", wid)
+
+        if dispatch_result is not None and bool(getattr(dispatch_result, "success", False)):
+            try:
+                notifications.notify(
+                    "Automated Plan Dispatched",
+                    f"{title_text} ({wid}) has been dispatched for automated planning.",
+                    message_type="plan",
+                )
+            except Exception:
+                LOG.exception("Failed to send plan dispatch notification for %s", wid)
 
         # Add a Worklog comment summarising the dispatch result
         try:
