@@ -136,6 +136,66 @@ def test_plan_failure_schedules_backoff(monkeypatch):
     assert 14 * 60 <= delta <= 16 * 60
 
 
+def test_plan_posts_worklog_comment_on_dispatch(monkeypatch):
+    from ampa.plan_runner import PlanRunner
+
+    store = make_store()
+    cmd_id = "plan-runner"
+    store.update_state(cmd_id, {})
+
+    from ampa.engine.dispatch import DispatchResult
+
+    def fake_dispatch(command, work_item_id):
+        return DispatchResult(
+            success=True,
+            command=command,
+            work_item_id=work_item_id,
+            timestamp=dt.datetime.now(dt.timezone.utc),
+            pid=456,
+        )
+
+    class DummyDispatcher:
+        def dispatch(self, command, work_item_id):
+            return fake_dispatch(command, work_item_id)
+
+    import ampa.plan_runner as pr
+
+    class DummySelector:
+        def __init__(self, run_shell=None, cwd=None):
+            pass
+
+        def query_candidates(self):
+            return [{"id": "WL-1", "title": "Test Item"}]
+
+        def select_top(self, candidates):
+            return candidates[0] if candidates else None
+
+    monkeypatch.setattr(pr, "PlanCandidateSelector", DummySelector)
+    monkeypatch.setattr(pr, "PlanDispatcher", lambda *a, **k: DummyDispatcher())
+
+    calls = []
+
+    class DummyProc:
+        returncode = 0
+        stdout = "{}"
+        stderr = ""
+
+    def run_shell(cmd, **kwargs):
+        calls.append(cmd)
+        return DummyProc()
+
+    runner = PlanRunner(run_shell=run_shell, command_cwd=".")
+    spec = SimpleNamespace(command_id=cmd_id, metadata={})
+
+    res = runner.run(spec, store)
+    assert res["planned"] == "WL-1"
+
+    comment_calls = [c for c in calls if c.startswith("wl comment add WL-1")]
+    assert comment_calls, "Expected a wl comment add call for dispatched plan"
+    assert '--author "ampa"' in comment_calls[0]
+    assert "Automated plan dispatched by AMPA" in comment_calls[0]
+
+
 def test_plan_permanent_failure_notifies(monkeypatch):
     from ampa.plan_runner import PlanRunner
 
