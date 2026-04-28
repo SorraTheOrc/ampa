@@ -233,6 +233,12 @@ start_metrics_server(port=8000)
 
 Integration test example (pytest)
 
+Run the plan-runner integration test locally:
+
+    PYTHONPATH=src pytest -q tests/test_plan_runner_integration.py -q
+
+
+
 The repository includes integration tests that start the server on an ephemeral
 port. Run them with `pytest -q` and confirm `tests/test_metrics_and_health.py`
 passes.
