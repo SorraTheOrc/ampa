@@ -8,7 +8,7 @@ AMPA provides automated project management capabilities including:
 
 - **Automated Scheduling**: Intelligent task scheduling and delegation
 - **Plan Runner Automation**: Auto-dispatches `/plan {id}` for eligible `intake_complete` items
-- **Discord Integration**: Bot for notifications and team communication
+- **Discord Integration**: Bot for notifications and team communication (including plan-runner dispatch success and permanent-failure alerts)
 - **Audit & Monitoring**: Continuous project health monitoring
 - **PR Monitoring**: Automated pull request tracking and notifications
 - **Session Management**: Work session blocking and management
